@@ -17,10 +17,11 @@ fit_envelope <- function(Y, X, D = diag(ncol(Y)),
                          Vinit = "OLS",
                          Lambda0 = t(X) %*% X,
                          prior_counts=0,
+                         Beta0 = matrix(0, nrow=ncol(X), ncol=ncol(Y)),
                          v1=0, v0 = 0,
                          U1=matrix(0, nrow=s, ncol=s),
                          U0=matrix(0, nrow=r, ncol=r),
-                         alpha=0, K = 0, center=TRUE, maxIters=1000){
+                         alpha=0, k = 0, center=TRUE, maxIters=1000, use_py=TRUE){
 
     
   Y <- Y %*% D
@@ -78,16 +79,14 @@ fit_envelope <- function(Y, X, D = diag(ncol(Y)),
   
   evals <- eigen(t(X) %*% X)$values
   if (evals[length(evals)] < 1e-6) {
-    stop("Perfect Colinearity in X")
+    warning("Perfect Colinearity in X")
   }
 
-
-    
   S <- t(Y) %*% Y 
-
-  beta_hat <- solve(t(X) %*% X + Lambda0) %*% t(X) %*% Y 
+    
+  beta_hat <- solve(t(X) %*% X + Lambda0) %*% (t(X) %*% Y + Lambda0 %*% Beta0)
   
-  A <- t(Y - X %*% beta_hat) %*% (Y - X %*% beta_hat) + t(beta_hat) %*% Lambda0 %*% beta_hat 
+  A <- t(Y - X %*% beta_hat) %*% (Y - X %*% beta_hat) + t(Beta0 - beta_hat) %*% Lambda0 %*% (Beta0 - beta_hat)
 
   ## compute negative log-likelihood
   F <- function(V) {
@@ -95,21 +94,21 @@ fit_envelope <- function(Y, X, D = diag(ncol(Y)),
     G <- V[, 1:s, drop=FALSE]
     if(r > 0) {
       G0 <- V[, (s+1):(s+r)]
-      G0part <- (n - r - v0 - 1)/2 * determinant(t(G0) %*% S %*% G0 + U0, logarithm = TRUE)$modulus
+      G0part <- (n + r + v0 - 1)/2 * determinant(t(G0) %*% S %*% G0 + U0, logarithm = TRUE)$modulus
 
       if(r + s < p){
-        sig2part <- ((n - (p-s-r))/2 + alpha) * log(tr(S) - tr(t(V) %*% S %*% V) + K)
+        sig2part <- (n*(p-s-r)/2 + alpha) * log(tr(S)/2 - tr(t(V) %*% S %*% V)/2 + k)
       } else {
         sig2part <- 0
       }
       
     } else {
       G0part <- 0
-      sig2part <- ((n - (p-s-r))/2 + alpha) * log(tr(S) - tr(t(V) %*% S %*% V) + K)
+      sig2part <- (n*(p-s-r)/2 + alpha) * log(tr(S)/2 - tr(t(V) %*% S %*% V)/2 + k)
     }
 
     ## Minimize the negative log likelihood
-    (n - s - q - v1 - 1)/2 * determinant(t(G) %*% A %*% G + U1, logarithm = TRUE)$modulus + G0part + sig2part
+    (n + v1 + s +1 - q)/2 * determinant(t(G) %*% A %*% G + U1, logarithm = TRUE)$modulus + G0part + sig2part
                                                                            
   }
 
@@ -117,19 +116,19 @@ fit_envelope <- function(Y, X, D = diag(ncol(Y)),
   dF <- function(V) {
 
     G <- V[, 1:s, drop=FALSE]
-    Gpart <- - (n - s - q - v1 - 1) * A %*% G %*% solve(t(G) %*% A %*% G + U1)
+    Gpart <- - (n + s + v1 + 1 - q) * A %*% G %*% solve(t(G) %*% A %*% G + U1)
 
     if(r > 0) {
       G0 <- V[, (s+1):(s+r)]
-      G0part <- - (n - r - v0 - 1) * S %*% G0 %*% solve(t(G0) %*% S %*% G0 + U0)
+      G0part <- - (n + r + v0 + 1) * S %*% G0 %*% solve(t(G0) %*% S %*% G0 + U0)
     } else {
       G0part <- matrix(0, nrow=nrow(V), ncol=0)
     }
 
     if(r + s < p){
-      sig2part <- (n - (p-s-r)) / (tr(S) - tr(t(V) %*% S %*% V) + K) * S %*% V
+        sig2part <- - (n*(p-s-r)/2 + alpha) / (tr(S)/2 - tr(t(V) %*% S %*% V)/2 + k) * S %*% V
     } else {
-      sig2part <- matrix(0, nrow=p, ncol=s+r)
+        sig2part <- matrix(0, nrow=p, ncol=s+r)
     }
 
     
@@ -143,16 +142,30 @@ fit_envelope <- function(Y, X, D = diag(ncol(Y)),
       
   }
 
-  print("Fitting Stiefel manifold")
-  Vfit <- optStiefel(
-    function(V) F(V),
-    function(V) dF(V),
-    method = "bb",
-    Vinit = Vinit,
-    verbose = TRUE,
-    maxIters = maxIters,
-    maxLineSearchIters = 20
-  )
+    print("Fitting Stiefel manifold")
+    if (use_py) {
+
+        Vfit <- optStiefel_py(Vinit,
+                              as.integer(n),
+                              as.integer(p),
+                              as.integer(s),
+                              as.integer(r),
+                              as.integer(q),
+                              U0, U1, alpha, v0, v1, S, k, A,
+                              maxiters = maxIters)
+    }
+    else {
+
+        Vfit <- optStiefel(
+            function(V) F(V),
+            function(V) dF(V),
+            method = "bb",
+            Vinit = Vinit,
+            verbose = TRUE,
+            maxIters = maxIters,
+            maxLineSearchIters = 20
+        )
+    }
 
     Yproj <- Y %*% Vfit[, 1:s]
     eta_hat_env <- solve(t(X) %*% X + Lambda0) %*% t(X) %*% Yproj
