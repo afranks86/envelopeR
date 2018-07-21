@@ -13,7 +13,7 @@ def Fpy1(V, n, p, s, r, q, U0, U1, alpha, v0, v1, S, k, A):
     ## irrelevant variation
     G0 = V[:, s:(s+r)]
     G0part = (n + r + v0 + 1)/2 * np.linalg.slogdet(G0.T @ S @ G0 + U0)[1]
-    sig2part = (n*(p-s-r)/2 + alpha) * np.log(np.trace(S)/2 - np.trace(t(V) %*% S %*% V)/2 + k)
+    sig2part = (n*(p-s-r)/2 + alpha) * np.log(np.trace(S)/2 - np.trace(t(V) @ S @ V)/2 + k)
     ## Minimize the negative log likelihood
     return (n + s + v1 + 1 - q)/2 * np.linalg.slogdet(G.T @ A @ G + U1)[1] + G0part + sig2part
 
@@ -41,7 +41,7 @@ def Fpy3(V, n, p, s, q, U1, alpha, v1, S, k, A):
     G = V[:, 0:s]
 
     ## irrelevant variation
-    sig2part = (n*(p-s)/2 + alpha) * np.log(np.trace(S)/2 - np.trace(t(V) %*% S %*% V)/2 + k)
+    sig2part = (n*(p-s)/2 + alpha) * np.log(np.trace(S)/2 - np.trace(t(V) @ S @ V)/2 + k)
 
     
     ## Minimize the negative log likelihood
