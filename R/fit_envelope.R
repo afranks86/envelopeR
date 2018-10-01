@@ -1,7 +1,4 @@
-library(tidyverse)
-library(magrittr)
-library(Matrix)
-library(rstiefel)
+
 
 ## This is a general envelope function
 
@@ -21,7 +18,11 @@ fit_envelope <- function(Y, X, D = diag(ncol(Y)),
                          v1=0, v0 = 0,
                          U1=matrix(0, nrow=s, ncol=s),
                          U0=matrix(0, nrow=r, ncol=r),
-                         alpha=0, k = 0, center=TRUE, maxIters=1000, use_py=TRUE){
+                         alpha=0, k = 0, L=0,
+                         center=TRUE, maxIters=1000, use_py=TRUE){
+
+  library(Matrix)
+  library(rstiefel)
 
     
   Y <- Y %*% D
@@ -30,8 +31,8 @@ fit_envelope <- function(Y, X, D = diag(ncol(Y)),
   q <- ncol(X)
 
   intercept <- rep(0, ncol(Y))
-  if(center) {
-      intercept = colMeans(Y)
+    if(center) {
+      intercept <- colMeans(Y)
       Y <- scale(Y, scale=FALSE)
   } else {
     intercept <- rep(0, ncol(Y))
@@ -94,7 +95,7 @@ fit_envelope <- function(Y, X, D = diag(ncol(Y)),
     G <- V[, 1:s, drop=FALSE]
     if(r > 0) {
       G0 <- V[, (s+1):(s+r)]
-      G0part <- (n + r + v0 - 1)/2 * determinant(t(G0) %*% S %*% G0 + U0, logarithm = TRUE)$modulus
+      G0part <- (n + v0)/2 * determinant(t(G0) %*% S %*% G0 + U0, logarithm = TRUE)$modulus
 
       if(r + s < p){
         sig2part <- (n*(p-s-r)/2 + alpha) * log(tr(S)/2 - tr(t(V) %*% S %*% V)/2 + k)
@@ -108,7 +109,7 @@ fit_envelope <- function(Y, X, D = diag(ncol(Y)),
     }
 
     ## Minimize the negative log likelihood
-    (n + v1 + s +1 - q)/2 * determinant(t(G) %*% A %*% G + U1, logarithm = TRUE)$modulus + G0part + sig2part
+    (n + v1 - q)/2 * determinant(t(G) %*% A %*% G + U1, logarithm = TRUE)$modulus + G0part + sig2part
                                                                            
   }
 
@@ -116,22 +117,20 @@ fit_envelope <- function(Y, X, D = diag(ncol(Y)),
   dF <- function(V) {
 
     G <- V[, 1:s, drop=FALSE]
-    Gpart <- - (n + s + v1 + 1 - q) * A %*% G %*% solve(t(G) %*% A %*% G + U1)
+    Gpart <- (n + v1 - q) * A %*% G %*% solve(t(G) %*% A %*% G + U1)
 
     if(r > 0) {
       G0 <- V[, (s+1):(s+r)]
-      G0part <- - (n + r + v0 + 1) * S %*% G0 %*% solve(t(G0) %*% S %*% G0 + U0)
+      G0part <- (n + v0) * S %*% G0 %*% solve(t(G0) %*% S %*% G0 + U0)
     } else {
       G0part <- matrix(0, nrow=nrow(V), ncol=0)
     }
 
     if(r + s < p){
-        sig2part <- - (n*(p-s-r)/2 + alpha) / (tr(S)/2 - tr(t(V) %*% S %*% V)/2 + k) * S %*% V
+        sig2part <- (n*(p-s-r)/2 + alpha) / (tr(S)/2 - tr(t(V) %*% S %*% V)/2 + k) * S %*% V
     } else {
         sig2part <- matrix(0, nrow=p, ncol=s+r)
     }
-
-    
 
     dV <- cbind(Gpart, matrix(0, nrow=p, ncol=r)) +
       cbind(matrix(0, nrow=p, ncol=s), G0part) +
@@ -151,7 +150,7 @@ fit_envelope <- function(Y, X, D = diag(ncol(Y)),
                               as.integer(s),
                               as.integer(r),
                               as.integer(q),
-                              U0, U1, alpha, v0, v1, S, k, A,
+                              U0, U1, alpha, v0, v1, S, k, A, L,
                               maxiters = maxIters)
     }
     else {
@@ -175,4 +174,18 @@ fit_envelope <- function(Y, X, D = diag(ncol(Y)),
     
 }
 
+lw_shrinker <- function(Y) {
+    p <- ncol(Y)
+    n <- nrow(Y)
+    
+    S <- t(Y) %*% Y / n
+    m <- tr(S)
+    D <- S - m*diag(p)
+    d <- tr(t(A) %*% A) / p
 
+    b <-
+
+    b^2 / d^2 * m * diag(p) + (d^2 - b^2 ) / d^2  * S
+        
+    
+}
