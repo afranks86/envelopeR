@@ -12,10 +12,10 @@ def Fpy1(V, n, p, s, r, q, U0, U1, alpha, v0, v1, S, k, A):
 
     ## irrelevant variation
     G0 = V[:, s:(s+r)]
-    G0part = (n + r + v0 + 1)/2 * np.linalg.slogdet(G0.T @ S @ G0 + U0)[1]
+    G0part = (n + v0)/2 * np.linalg.slogdet(G0.T @ S @ G0 + U0)[1]
     sig2part = (n*(p-s-r)/2 + alpha) * np.log(np.trace(S)/2 - np.trace(V.T @ S @ V)/2 + k)
     ## Minimize the negative log likelihood
-    return (n + s + v1 + 1 - q)/2 * np.linalg.slogdet(G.T @ A @ G + U1)[1] + G0part + sig2part
+    return (n + v1 - q)/2 * np.linalg.slogdet(G.T @ A @ G + U1)[1] + G0part + sig2part
 
 
 ## compute negative log-likelihood
@@ -27,10 +27,10 @@ def Fpy2(V, n, p, s, r, q, U0, U1, alpha, v0, v1, S, k, A):
 
     ## irrelevant variation
     G0 = V[:, s:(s+r)]
-    G0part = (n + r + v0 + 1)/2 * np.linalg.slogdet(G0.T @ S @ G0 + U0)[1]
+    G0part = (n + v0)/2 * np.linalg.slogdet(G0.T @ S @ G0 + U0)[1]
 
     ## Minimize the negative log likelihood
-    return (n + s + v1 + 1 - q)/2 * np.linalg.slogdet(G.T @ A @ G + U1)[1] + G0part
+    return (n + v1 - q)/2 * np.linalg.slogdet(G.T @ A @ G + U1)[1] + G0part
 
 
 ## compute negative log-likelihood
@@ -45,12 +45,12 @@ def Fpy3(V, n, p, s, q, U1, alpha, v1, S, k, A):
 
     
     ## Minimize the negative log likelihood
-    return (n + s + v1 + 1 - q)/2 * np.linalg.slogdet(G.T @ A @ G + U1)[1] + sig2part
+    return (n + v1 - q)/2 * np.linalg.slogdet(G.T @ A @ G + U1)[1] + sig2part
 
 
 
-def optStiefel_py(Vinit, n, p, s, r, q, U0, U1, alpha, v0, v1, S, k, A,
-                  maxtime=1000, maxiters=1000):
+def create_envelope_problem_py(Vinit, n, p, s, r, q, U0, U1, alpha, v0, v1, S, k, A, L=0):
+
     
     if (r > 0) & (r + s < p):
         def Fx(X):
@@ -61,10 +61,21 @@ def optStiefel_py(Vinit, n, p, s, r, q, U0, U1, alpha, v0, v1, S, k, A,
     else:
         def Fx(X):
             return Fpy3(X, n, p, s, q, U1, alpha, v1, S, k, A)
-        
-    manifold = Stiefel(p, (s+r))
-    problem = Problem(manifold=manifold, cost=Fx)
 
+    def Gx(X):
+        if L > 0:
+            return Fx(X) + L*np.sum(np.sqrt(np.diag(X[:, 0:s] @ X[:, 0:s].T)))
+        else:
+            return Fx(X)
+            
+    manifold = Stiefel(p, (s+r))
+    problem = Problem(manifold=manifold, cost=Gx)
+    return problem
+
+def optim_envelope_py(Vinit, n, p, s, r, q, U0, U1, alpha, v0, v1, S, k, A, L=0,                  maxtime=1000, maxiters=1000):
+
+    problem = create_envelope_problem_py(Vinit, n, p, s, r, q, U0, U1, alpha, v0, v1, S, k, A, L)
+    
     # Instantiate a Pymanopt solver
     solver = SteepestDescent(maxtime=maxtime, maxiter=maxiters)
 
@@ -72,12 +83,10 @@ def optStiefel_py(Vinit, n, p, s, r, q, U0, U1, alpha, v0, v1, S, k, A,
     Xopt = solver.solve(problem, x=Vinit)
     return Xopt
 
-def evalStiefel_py(X, n, p, s, r, q, U0, U1, alpha, v0, v1, S, k, A):
-    
-    if (r > 0) & (r + s < p):
-        return Fpy1(X, n, p, s, r, q, U0, U1, alpha, v0, v1, S, k, A)
-    elif (r > 0) & (r + s == p):
-        return Fpy2(X, n, p, s, r, q, U0, U1, alpha, v0, v1, S, k, A)
-    else:
-        return Fpy3(X, n, p, s, q, U1, alpha, v1, S, k, A)
+def envelope_cost_py(V, n, p, s, r, q, U0, U1, alpha, v0, v1, S, k, A, L=0):
+    problem = create_envelope_problem_py(V, n, p, s, r, q, U0, U1, alpha, v0, v1, S, k, A, L)
+    return problem.cost(V)
 
+def envelope_grad_py(V, n, p, s, r, q, U0, U1, alpha, v0, v1, S, k, A, L=0):
+    problem = create_envelope_problem_py(V, n, p, s, r, q, U0, U1, alpha, v0, v1, S, k, A, L)
+    return problem.grad(V)
