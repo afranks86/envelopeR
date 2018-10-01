@@ -1,2 +1,9 @@
 Package: envelopeR
 Version: 0.1
+Imports:
+    rstiefel,
+    reticulate,
+    Matrix
+Suggests:
+    tidyverse,
+    magrittr
