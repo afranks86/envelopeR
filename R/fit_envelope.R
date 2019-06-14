@@ -72,10 +72,11 @@ optimize_envelope <- function(Y, X, D = diag(ncol(Y)),
                               v1=0, v0 = 0,
                               U1=matrix(0, nrow=s, ncol=s),
                               U0=matrix(0, nrow=r, ncol=r),
-                              alpha=0, k = 0, L=0,
+                              alpha=0, nu = 0, L=0,
                               center=TRUE, maxIters=1000, use_py=FALSE,
                               searchParams=NULL, ...){
-    
+
+
     Y <- Y %*% D
     n <- nrow(Y)
     p <- ncol(Y)
@@ -97,17 +98,19 @@ optimize_envelope <- function(Y, X, D = diag(ncol(Y)),
     if(is.character(Vinit)) {
         if(Vinit == "OLS") {
 
-            Vinit <- svd(beta_hat)$v[, 1:min(s, q), drop=FALSE]
-            res_proj <- (diag(p) - Vinit %*% t(Vinit)) %*% t(resid)
+            Ginit <- svd(beta_hat)$v[, 1:min(s, q), drop=FALSE]
             if(s > q) {
-                Vinit <- cbind(Vinit, NullC(Vinit)[, 1:(s-q), drop=FALSE])
+                Ginit <- cbind(Ginit, NullC(Ginit)[, 1:(s-q), drop=FALSE])
             }
+
+            res_proj <- (diag(p) - Ginit %*% t(Ginit)) %*% t(resid)
+            
             if(r > 0) {
                 Uinit <- svd(res_proj)$u[, 1:r, drop=FALSE]
             } else
                 Uinit <- matrix(nrow=p, ncol=0)
             
-            Vinit <- cbind(Vinit, Uinit)
+            Vinit <- cbind(Ginit, Uinit)
             
         } else if(Vinit == "COV") {
             Vinit <- svd(Y)$v[, 1:(s+r), drop=FALSE]
@@ -140,6 +143,9 @@ optimize_envelope <- function(Y, X, D = diag(ncol(Y)),
     if (evals[length(evals)] < 1e-6) {
         warning("Perfect Colinearity in X")
     }
+
+
+
     
     ## shrinkage_coefs <- lw_shrinkage(resid)
 
@@ -160,13 +166,13 @@ optimize_envelope <- function(Y, X, D = diag(ncol(Y)),
             G0 <- V[, (s+1):(s+r)]
             YG0 <- Y %*%  G0
             rG0 <- resid %*%  G0 ## to remove
-            G0part <- (n + r + v0)/2 * determinant((t(YG0)) %*% (YG0) + U0,
+            G0part <- (n + r + v0 - 1)/2 * determinant((t(YG0)) %*% (YG0) + U0,
                                                    logarithm = TRUE)$modulus
 
             if(r + s < p){
                 YV <- Y %*% V
                 sig2part <- (n*(p-s-r)/2 + alpha) *
-                    log(sum(Y^2)/2 - sum(YV^2)/2 + k)
+                    log(sum(Y^2)/2 - sum(YV^2)/2 + nu)
             } else {
                 sig2part <- 0
             }
@@ -175,17 +181,16 @@ optimize_envelope <- function(Y, X, D = diag(ncol(Y)),
             G0part <- 0
             YV <- Y %*% V
             sig2part <- (n*(p-s-r)/2 + alpha) *
-                log(sum(Y^2) / 2 - sum(YV^2)/2 + k)
+                log(sum(Y^2) / 2 - sum(YV^2)/2 + nu)
         }
 
-        ## Minimize the negative log likelihood
-
         rG <- resid %*% G
-        (n + s + v1 + 1 - q)/2 *
+        Gpart <- (n + s + v1 + 1 - q)/2 *
             determinant(t(rG) %*% rG +  t(prior_diff %*% G) %*% Lambda0 %*%
-                        (prior_diff %*% G) + U1, logarithm = TRUE)$modulus +
-                                                                 G0part +
-                                                                 sig2part 
+                        (prior_diff %*% G) + U1, logarithm = TRUE)$modulus
+        
+        ## Minimize the negative log likelihood
+        Gpart + G0part + sig2part 
         
     }
 
@@ -216,7 +221,7 @@ optimize_envelope <- function(Y, X, D = diag(ncol(Y)),
         if(r + s < p){
             YV <- Y %*% V
             sig2part <- (n*(p-s-r)/2 + alpha) /
-                (sum(Y^2)/2 - sum(YV^2)/2 + k) * t(Y) %*% YV
+                (sum(Y^2)/2 - sum(YV^2)/2 + nu) * t(Y) %*% YV
         } else {
             sig2part <- matrix(0, nrow=p, ncol=s+r)
         }
@@ -229,7 +234,8 @@ optimize_envelope <- function(Y, X, D = diag(ncol(Y)),
         -dV
         
     }
-
+    browser()
+    print(sprintf("------ F(V) = %f --------", F(Vinit)))
     print("Fitting Stiefel manifold")
     if (use_py) {
 
@@ -276,7 +282,7 @@ optimize_envelope_kd <- function(Y, X, D = diag(ncol(Y)),
                                  v1=0, v0 = 0,
                                  U1=matrix(0, nrow=s, ncol=s),
                                  U0=matrix(0, nrow=r, ncol=r),
-                                 alpha=0, k = (s+r), L=0,
+                                 alpha=0, nu=0, k = (s+r), L=0,
                                  center=TRUE, maxIters=1000, use_py=FALSE,
                                  searchParams=NULL, ...){
     
@@ -346,6 +352,9 @@ optimize_envelope_kd <- function(Y, X, D = diag(ncol(Y)),
     if (evals[length(evals)] < 1e-6) {
         warning("Perfect Colinearity in X")
     }
+
+    ## m1 <- median(svd(resid)$d)^2
+    ## m0 <- median(svd(Y)$d)^2
     
     ## shrinkage_coefs <- lw_shrinkage(resid)
 
@@ -361,6 +370,35 @@ optimize_envelope_kd <- function(Y, X, D = diag(ncol(Y)),
     ## compute negative log-likelihood
 
 
+
+    ## if(n >= p) {
+    ##     M <- t(Y) %*% Y
+    ##     MV2 <- M %*% Vr2
+    ##     if(ncol(Vr2) > 0)
+    ##         VMVinv <- solve(t(Vr2) %*% M %*% Vr2)
+    ##     else
+    ##         VMVinv <- matrix(nrow=0, ncol=0)
+
+    ##     A <- t(NullVfixed) %*%
+    ##         (M - MV2 %*% VMVinv %*% t(MV2)) %*%
+    ##         NullVfixed
+        
+    ## } else {
+
+    ##     YNR1 <- Y %*% NullVfixed %*% Vr1
+    ##     YR2 <- (Y %*% Vr2)
+    ##     M <- t(YNR1) %*% YNR1
+    ##     if(ncol(Vr2) > 0)
+    ##         VMVinv <- solve(t(YR2) %*% YR2)
+    ##     else
+    ##         VMVinv <- matrix(nrow=0, ncol=0)
+
+    ##     VAVinv <- solve((M - t(YNR1) %*% YR2 %*%
+    ##                      VMVinv %*% t(YR2) %*% YNR1))
+
+    ## }
+    
+    
     F <- function(V) {
 
         G <- V[, 1:s, drop=FALSE]
@@ -374,7 +412,7 @@ optimize_envelope_kd <- function(Y, X, D = diag(ncol(Y)),
             if(r + s < p){
                 YV <- Y %*% V
                 sig2part <- (n*(p-s-r)/2 + alpha) *
-                    log(sum(Y^2)/2 - sum(YV^2)/2 + k)
+                    log(sum(Y^2)/2 - sum(YV^2)/2 + nu)
             } else {
                 sig2part <- 0
             }
@@ -383,17 +421,17 @@ optimize_envelope_kd <- function(Y, X, D = diag(ncol(Y)),
             G0part <- 0
             YV <- Y %*% V
             sig2part <- (n*(p-s-r)/2 + alpha) *
-                log(sum(Y^2) / 2 - sum(YV^2)/2 + k)
+                log(sum(Y^2) / 2 - sum(YV^2)/2 + nu)
         }
 
-        ## Minimize the negative log likelihood
 
         rG <- resid %*% G
-        (n + s + v1 + 1 - q)/2 *
+        Gpart <- (n + s + v1 + 1 - q)/2 *
             determinant(t(rG) %*% rG +  t(prior_diff %*% G) %*% Lambda0 %*%
-                        (prior_diff %*% G) + U1, logarithm = TRUE)$modulus +
-                                                                 G0part +
-                                                                 sig2part 
+                        (prior_diff %*% G) + U1, logarithm = TRUE)$modulus
+        
+        ## Minimize the negative log likelihood
+        Gpart + G0part + sig2part  
         
     }
 
@@ -424,7 +462,7 @@ optimize_envelope_kd <- function(Y, X, D = diag(ncol(Y)),
         if(r + s < p){
             YV <- Y %*% V
             sig2part <- (n*(p-s-r) + 2*alpha) /
-                (sum(Y^2)/2 - sum(YV^2)/2 + k) * t(Y) %*% YV
+                (sum(Y^2)/2 - sum(YV^2)/2 + nu) * t(Y) %*% YV
         } else {
             sig2part <- matrix(0, nrow=p, ncol=s+r)
         }
@@ -432,23 +470,22 @@ optimize_envelope_kd <- function(Y, X, D = diag(ncol(Y)),
         dV <- cbind(Gpart, matrix(0, nrow=p, ncol=r)) +
             cbind(matrix(0, nrow=p, ncol=s), G0part) +
             sig2part
-
+        
         ## negative ll grad
         -dV
         
     }
-
     
     V <- Vinit
     ## (Until convergence do)
     
-    max_count <- 3
+    max_count <- 40
     count <- 1
 
-    if(k == ncol(V)) {
-        stop("k = ncol(V).  Don't use _kd opt.")
-    }
-    
+    ## if(k == ncol(V)) {
+    ##     stop("k = ncol(V).  Don't use _kd opt.")
+    ## }
+
     while(TRUE & count < max_count) {
         
         indices_mat <- suppressWarnings(matrix(sample(ncol(V)),
@@ -456,168 +493,165 @@ optimize_envelope_kd <- function(Y, X, D = diag(ncol(Y)),
                                                byrow=TRUE))
         
         print(sprintf("------ F(V) = %f --------", F(V)))
+
+        #V <- V %*% as.matrix(Matrix::bdiag(list(rustiefel(s, s), rustiefel(r,r))))
         
         for(i in 1:nrow(indices_mat)) {
 
-            indices <- indices_mat[i, ]
+            indices <- sort(indices_mat[i, ])
+            
             s_indices <- indices[indices <= s]
             r_indices <- indices[indices > s]
-
+            
             Vfixed <- V[, -indices, drop=FALSE]
             NullVfixed <- NullC(Vfixed)        
-            
-            ## Fixed part
-            Vr2 <- V[, setdiff((s+1):(s+r), r_indices), drop=FALSE] #G0_0
-            Vs2 <- V[, setdiff(1:s, s_indices), drop=FALSE] #G1_0
 
-            browser()
+            ## Fixed part
+            Vr2 <- V[, setdiff((s+1):(s+r), r_indices), drop=FALSE] 
+            Vs2 <- V[, setdiff(1:s, s_indices), drop=FALSE] 
+
             ## Vi is a (p-k) x (s+r) dim matrix
             Fi <- function(Vi) {
+                Vcur <-  V
+                Vcur[, s_indices] <- NullVfixed %*% Vi[, 1:length(s_indices), drop=FALSE]
+                if(length(r_indices) > 0)
+                    Vcur[, r_indices] <- NullVfixed %*% Vi[, (length(s_indices)+1):length(indices), drop=FALSE]
+                F(Vcur)
 
-
-                Vr <- Vi[, r_indices, drop=FALSE] #G0_1
-                Vs <- Vi[, s_indices, drop=FALSE] #G1_1
-                
-                if(length(r_indices) > 0) {
-
-
-                    G0 <- V[, (s+1):(s+r)]
-                    YG0 <- Y %*%  G0
-                    rG0 <- resid %*%  G0 ## to remove
-                    G0part <- (n + r + v0)/2 * determinant((t(YG0)) %*% (YG0) + U0,
-                                                           logarithm = TRUE)$modulus
-
-                    
-                    YNV <- Y %*% NullVfixed
-                    YVr_fixed <- Y %*% Vr2
-                    
-                    ## Need to fix this a bit
-                    M <- t(YNV) %*% YNV
-                    NMV2 <- t(YNV) %*% Y %*% Vfixed
-
-                    A <- (M -  NMV2 %*% solve(t(Vfixed) %*% M %*% Vfixed)) %*%  NMV2)
-
-                    G0part <- (n + r + v0)/2 *
-                        determinant(t(Vr) %*% A %*% Vr, logarithm = TRUE)$modulus
-
-                    if(r + s < p){
-                        
-                        YV <- Y %*% V
-                        sig2part <- (n*(p-s-r)/2 + alpha) *
-                            log(sum(Y^2)/2 - sum(YV^2)/2)
-                        
-                    } else {
-                        sig2part <- 0
-                    }
-                } else {
-                    G0part <- 0
-                    YV <- Y %*% V
-                    sig2part <- (n*(p-s-r)/2 + alpha) *
-                        log(sum(Y^2) / 2 - sum(YV^2)/2 + k)
-                }
-
-                
-                if(length(s_indices) > 0) {
-
-                    G1_1 <- Vi[, s_indices, drop=FALSE]
-                    
-                    residNV <- resid %*% NullV
-                    pdNV <- prior_diff %*% NullV
-                    YG1_0 <- Y %*% G1_0
-                    
-                    M <- t(residNV) %*% residNV + t(pdNV) %*% Lambda0 %*% pdNV
-                    M2 <- (t(resid) %*% resid + t(prior_diff) %*% Lambda0 %*% prior_diff)
-                    NMV2 <-  t(NullV) %*% M2 %*% G1_0
-                    A <- (M - NMV2 %*% solve(t(G1_0) %*% M2 %*% G1_0) %*% t(NMV2))
-                    
-                    Gpart <- (n + s + v1 + 1 - q)/2 *
-                        determinant(t(G1_1) %*% A %*% G1_1, logarithm = TRUE)$modulus
-                }
-
-                ## Minimize the negative log likelihood
-                Gpart + G0part + sig2part 
-                
             }
 
+            ## TO DO : speed up matrix computations by ordering
             ## compute gradient of negative log-likelihood
             dFi <- function(Vi) {
 
-                G <- V[, 1:s, drop=FALSE]
-
-                rG <- resid %*% G
-
+                Vs1 <- Vi[, 1:length(s_indices), drop=FALSE]
+                if(length(r_indices) > 0)
+                    Vr1 <- Vi[, (length(s_indices)+1):length(indices), drop=FALSE]
+                else
+                    Vr1 <- matrix(nrow=nrow(Vs1), ncol=0)
 
                 if(length(r_indices) > 0) {
-                    G0_1 <- Vi[, r_indices, drop=FALSE]
+                    ## For speed
+                    if(n >= p) {
+                        M <- t(Y) %*% Y
+                        MV2 <- M %*% Vr2
+                        if(ncol(Vr2) > 0)
+                            VMVinv <- solve(t(Vr2) %*% M %*% Vr2)
+                        else
+                            VMVinv <- matrix(nrow=0, ncol=0)
 
-                    YG0 <- Y %*%  G0_0
-                    G0part <- (n + v0) * t(Y) %*% (Y %*% G0) %*%
-                        solve(t(YG0) %*% YG0 + U0)
+                        A <- t(NullVfixed) %*%
+                            (M - MV2 %*% VMVinv %*% t(MV2)) %*%
+                            NullVfixed
+                        
+                        G0part <- (n + r + v0 - 1) * A %*% Vr1 %*%
+                            solve(t(Vr1) %*% A %*% Vr1)
+                    } else {
+                        m0 <- microbenchmark({
+                        YNR1 <- Y %*% NullVfixed %*% Vr1
+                        YR2 <- (Y %*% Vr2)
+                        M <- t(YNR1) %*% YNR1
+                        if(ncol(Vr2) > 0)
+                            VMVinv <- solve(t(YR2) %*% YR2)
+                        else
+                            VMVinv <- matrix(nrow=0, ncol=0)
+
+                        VAVinv <- solve((M - t(YNR1) %*% YR2 %*%
+                                         VMVinv %*% t(YR2) %*% YNR1))
+
+                        G0part <- (n + r + v0 - 1) *
+                            (t(Y %*% NullVfixed) %*% YNR1 - t(Y %*% NullVfixed)
+                                %*% YR2 %*% VMVinv %*% t(YR2) %*% YNR1) %*% VAVinv
+                        })
+                    }
                     
                 } else {
-                    G0part <- matrix(0, nrow=nrow(V), ncol=0)
+                    G0part <- matrix(0, nrow=nrow(Vi), ncol=0)
                 }
 
                 if(r + s < p){
-                    YV <- Y %*% V
-                    sig2part <- (n*(p-s-r)/2 + alpha) /
-                        (sum(Y^2)/2 - sum(YV^2)/2 + k) * t(Y) %*% YV
+                    ## Double check
+                    ms <- microbenchmark({
+                    YV <- Y %*% NullVfixed %*% Vi
+                    sig2part <- (n*(p-s-r) + 2*alpha) /
+                        (sum(Y^2)/2 - sum(YV^2)/2 - sum((Y %*% V[, -indices])^2)/2 + nu) * t(Y %*% NullVfixed) %*% YV
+                    })
+                    
                 } else {
-                    sig2part <- matrix(0, nrow=p, ncol=s+r)
+                    sig2part <- matrix(0, nrow=ncol(NullVfixed), ncol=s+r)
                 }
+
 
                 if(length(s_indices) > 0) {
-                    G1_1 <- Vi[, s_indices, drop=FALSE]
-                    residNV <- resid %*% NullV
-                    pdNV <- prior_diff %*% NullV
-                    YG1_0 <- Y %*% G1_0
                     
-                    M <- t(residNV) %*% residNV + t(pdNV) %*% Lambda0 %*% pdNV
-                    M2 <- (t(resid) %*% resid + t(prior_diff) %*% Lambda0 %*% prior_diff)
-                    NMV2 <-  NullV %*% M2 %*% G1_0
-                    A <- (M - NMV2 %*% solve(t(G1_0) %*% M2 %*% G1_0) %*% t(NMV2))
-                    
+                    if(n >= p) {
+                        M <- t(resid) %*% resid  +
+                            t(prior_diff) %*% Lambda0 %*% prior_diff 
+                        MV2 <- M %*% Vs2
+                        if(ncol(Vs2) > 0)
+                            VMVinv <- solve(t(Vs2) %*% M %*% Vs2)
+                        else
+                            VMVinv <- matrix(ncol=0, nrow=0)
+                        
+                        A <- t(NullVfixed) %*%
+                            (M - MV2 %*% VMVinv %*% t(MV2)) %*%
+                            NullVfixed
+                        
+                        Gpart <- (n + s + v1 + 1 - q) * (A %*% Vs1 %*% solve(t(Vs1) %*% A %*% Vs1))
+                    } else {
+                        ## To replace with more efficient code
+                        M <- t(resid) %*% resid  +
+                            t(prior_diff) %*% Lambda0 %*% prior_diff 
+                        MV2 <- M %*% Vs2
 
-                    Gpart <- (n + v1 - q) * (t(resid) %*% rG + t(prior_diff) %*% Lambda0 %*%
-                                             (prior_diff  %*% G)) %*%
-                        solve(t(rG) %*% rG + t(prior_diff %*% G) %*% Lambda0 %*%
-                              (prior_diff %*% G) + U1)
+                        if(ncol(Vs2) > 0)                            
+                            VMVinv <- solve(t(Vs2) %*% M %*% Vs2)
+                        else
+                            VMVinv <- matrix(ncol=0, nrow=0)
 
-                    
+                        A <- t(NullVfixed) %*%
+                            (M - MV2 %*% VMVinv %*% t(MV2)) %*%
+                            NullVfixed
+                        
+                        Gpart <- (n + s + v1 + 1 - q) * (A %*% Vs1 %*% solve(t(Vs1) %*% A %*% Vs1))
+                    }
+
+                } else {
+                    Gpart <- matrix(0, nrow=ncol(NullVfixed),
+                                    ncol=length(s_indices))
                 }
 
-                dV <- cbind(Gpart, matrix(0, nrow=p, ncol=r)) +
-                    cbind(matrix(0, nrow=p, ncol=s), G0part) +
-                    sig2part
-
+                dV <- cbind(Gpart, G0part) + sig2part
+                
                 ## negative ll grad
                 -dV
-                
-            }
 
-            Vi_fit <- optStiefel(
+            }
+            browser()
+            Vi_fit <- rstiefel::optStiefel(
                 Fi,
                 dFi,
                 method = "bb",
-                Vinit = t(NullVfixed) %*% V,
-                verbose = FALSE,
+                Vinit = t(NullVfixed) %*% V[, indices],
+                verbose = TRUE,
                 maxIters = maxIters,
-                maxLineSearchIters = 20
+                maxLineSearchIters = 25,
+                searchParams = searchParams
             )
 
-            V[, indices] <- NullV %*% Vi_fit
-
+            V[, indices] <- NullVfixed %*% Vi_fit
+            count <- count + 1
             
             
         }
     }
-    Yproj <- Y %*% Vfit[, 1:s]
+    
+    Yproj <- Y %*% V[, 1:s]
     eta_hat_env <- solve(t(X) %*% X + Lambda0) %*% t(X) %*% Yproj
-    beta_env <- eta_hat_env %*% t(Vfit[, 1:s])
-
+    beta_env <- eta_hat_env %*% t(V[, 1:s])
 
     
-    list(V=Vfit, intercept=intercept, beta_ols=beta_hat,
+    list(V=V, intercept=intercept, beta_ols=beta_hat,
          beta_env=beta_env, eta_hat=eta_hat_env, F=F, dF=dF)
     
 }
@@ -904,7 +938,9 @@ optimize_envelope_cook_kd <- function(Y, X, D = diag(ncol(Y)),
         }
 
         print(sprintf("------ F(V) = %f --------", F(V)))
-        
+
+
+    browser()
     for(i in 1:nrow(indices_mat)) {
 
         indices <- indices_mat[i, ]
@@ -937,7 +973,6 @@ optimize_envelope_cook_kd <- function(Y, X, D = diag(ncol(Y)),
                 2 * B %*% Vi %*% solve(t(Vi) %*% B %*% Vi)
         }
 
-
         
         print("Fitting Stiefel manifold")
         Vfit <- optStiefel(
@@ -945,7 +980,7 @@ optimize_envelope_cook_kd <- function(Y, X, D = diag(ncol(Y)),
             dFi,
             method = "bb",
             Vinit = t(NullV2) %*% V1,
-            verbose = FALSE,
+            verbose = TRUE,
             maxIters = maxIters,
             maxLineSearchIters = 20
         )
@@ -1015,12 +1050,19 @@ if(FALSE) {
     library(mvtnorm)
     library(rstiefel)
     source("utility_functions.R")
+
+
+    n <- 100
+    p <- 1000
+    s <- 10
+    r <- 5
+    q <- 5
     
-    n <- 1000
-    p <- 500
-    s <- 50
-    r <- 10
-    q <- 10
+    ## n <- 1000
+    ## p <- 500
+    ## s <- 50
+    ## r <- 10
+    ## q <- 10
 
     X <- matrix(rnorm(n*q), nrow=n, ncol=q)
     
@@ -1039,40 +1081,44 @@ if(FALSE) {
         matrix(rnorm(n * p, sd=0.1), nrow=n, ncol=p)
 
 
-    ## Variance fit tests
-    res <- fit_envelope(Y, X, s=s, r=r, Vinit=rustiefel(p, s+r),
-                        use_py=FALSE,
-                        maxIters=1000,
-                        U1=0.1*diag(s),
-                        U0=0.1*diag(r),
-                        searchParams=list(rho=0.1, eta=0.9))
+    ## ## Variance fit tests
+    ## res <- fit_envelope(Y, X, s=s, r=r, Vinit=rustiefel(p, s+r),
+    ##                     use_py=FALSE,
+    ##                     maxIters=1000,
+    ##                     U1=0.1*diag(s),
+    ##                     U0=0.1*diag(r),
+    ##                     searchParams=list(rho=0.1, eta=0.9))
     
-    res <- fit_envelope(Y, X, s=s, r=r, Vinit=rustiefel(p, s+r),
-                        use_py=FALSE, maxIters=10000,
-                        U1=0.1*diag(s), U0=0.1*diag(r),
-                        searchParams=list(rho=0.1, eta=0.2))
+    ## res <- fit_envelope(Y, X, s=s, r=r, Vinit=rustiefel(p, s+r),
+    ##                     use_py=FALSE, maxIters=10000,
+    ##                     U1=0.1*diag(s), U0=0.1*diag(r),
+    ##                     searchParams=list(rho=0.1, eta=0.2))
 
-    res <- fit_envelope(Y, X, s=2*s, r=0,
-                        use_py=FALSE, maxIters=3000,
-                        U1=0.1*diag(2*s), U0=0.1*diag(r),
-                        searchParams=list(rho=0.1, eta=0.2))
+    ## res <- fit_envelope(Y, X, s=2*s, r=0,
+    ##                     use_py=FALSE, maxIters=3000,
+    ##                     U1=0.1*diag(2*s), U0=0.1*diag(r),
+    ##                     searchParams=list(rho=0.1, eta=0.2))
 
-    res <- fit_envelope(Y, X, s=s, r=r,
-                        Vinit=cbind(res$V, NullC(res$V)[, 1:r]), use_py=FALSE,
-                        maxIters=20000, U1=1*diag(s), U0=1*diag(r),
-                        searchParams=list(rho=1e-4, eta=0.9))
-
-    res <- fit_envelope(Y, X, s=s, r=r,
-                        Vinit="COV", use_py=FALSE,
-                        maxIters=10, U1=0*diag(s), U0=0*diag(r),
-                        searchParams=list(rho=1e-4, eta=0.9))
+    ## res <- fit_envelope(Y, X, s=s, r=r,
+    ##                     Vinit=cbind(res$V, NullC(res$V)[, 1:r]), use_py=FALSE,
+    ##                     maxIters=20000, U1=1*diag(s), U0=1*diag(r),
+    ##                     searchParams=list(rho=1e-4, eta=0.9))
 
     res <- fit_envelope(Y, X, s=s, r=r,
-                        distn="normal_kd",
-                        k=5,
+                        distn="normal",
                         Vinit="OLS", use_py=FALSE,
-                        maxIters=10000, 
+                        maxIters=10000,
                         searchParams=list(rho=1e-4, eta=0.9))
+
+    res_kd <- fit_envelope(Y, X, s=s, r=r,
+                        distn="normal_kd",
+                        k=15,
+                        Vinit="OLS", use_py=FALSE,
+                        maxIters=1000, 
+                        searchParams=list(rho=1e-4, eta=0.9))
+
+    res$F(res$V)
+    res$F(res$V %*% ))
 
     res <- fit_envelope(Y, X, s=s, r=r,
                         distn="cook",
