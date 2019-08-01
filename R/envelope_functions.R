@@ -95,10 +95,14 @@ dF_norm <- function(V, Y, resid, n, p, s, r, q, v1, v0, U1, U0,
 }
 
 ## compute gradient of negative log-likelihood?
-dFi_norm <- function(Vi, Y, s_indices, r_indices,
-                resid, n, p, s, r, q, v1, v0, U1, U0,
-                prior_diff, Lambda0, alpha, nu, L) {
+dFi_norm <- function(Vi, Y, YN, indices, s_indices, r_indices,
+                     RN, n, p, s, r, q, v1, v0, U1, U0,
+                     prior_diff, Lambda0, alpha, nu, L,
+                     AVs_part, AVr_part,
+                     LPN, rVr2, pVr2, VMVinv_r,
+                     rVs2, pVs2, VMVinv_s) {
 
+    
     Vs1 <- Vi[, 1:length(s_indices), drop=FALSE]
     if(length(r_indices) > 0)
         Vr1 <- Vi[, (length(s_indices)+1):length(indices), drop=FALSE]
@@ -106,45 +110,28 @@ dFi_norm <- function(Vi, Y, s_indices, r_indices,
         Vr1 <- matrix(nrow=nrow(Vs1), ncol=0)
 
     if(length(r_indices) > 0) {
-        ## For speed
-        if(n >= p) {
-            M <- t(Y) %*% Y
-            MV2 <- M %*% Vr2
-            if(ncol(Vr2) > 0)
-                VMVinv <- solve(t(Vr2) %*% M %*% Vr2)
-            else
-                VMVinv <- matrix(nrow=0, ncol=0)
 
-            A <- t(NullVfixed) %*%
-                (M - MV2 %*% VMVinv %*% t(MV2)) %*%
-                NullVfixed
-            
-            G0part <- (n + r + v0 - 1) * A %*% Vr1 %*%
-                solve(t(Vr1) %*% A %*% Vr1)
-        } else {
+        ## More efficient than commented part
 
-            ## More efficient than commented part
+        rVr1 <- RN %*% Vr1
+        pVr1 <- LPN %*% Vr1
 
-            rVr1 <- RN %*% Vr1
-            pVr1 <- LPN %*% Vr1
+        W <- (crossprod(rVr1, rVr2) + crossprod(pVr1, pVr2))
+        Vr1AVr1inv <- solve(crossprod(rVr1) + crossprod(rVr1) -
+                            W %*% VMVinv_r %*% t(W))
 
-            W <- (crossprod(rVr1, rVr2) + crossprod(pVr1, pVr2))
-            Vr1AVr1inv <- solve(crossprod(rVr1) + crossprod(rVr1) -
-                                W %*% VMVinv_r %*% t(W))
+        AVr1 <- crossprod(RN, rVr1) + crossprod(LPN, pVr1) -
+            tcrossprod(AVr_part, W)
 
-            AVr1 <- crossprod(RN, rVr1) + crossprod(LPN, pVr1) -
-                tcrossprod(AVr_part, W)
+        G0part <- (n + r + v0 - 1) * AVr1 %*% Vr1AVr1inv
 
-            G0part <- (n + r + v0 - 1) * AVr1 %*% Vr1AVr1inv
-
-        }
         
     } else {
         G0part <- matrix(0, nrow=nrow(Vi), ncol=length(r_indices))
     }
 
     if(r + s < p){
-
+        suppressMessages(browser())
         YV <- YN %*% Vi
         sig2part <- (n*(p-s-r) + 2*alpha) /
             (sum(Y^2)/2 - sum(YV^2)/2 - sum((Y %*% V[, -indices])^2)/2 + nu) * t(YN) %*% YV
@@ -157,37 +144,20 @@ dFi_norm <- function(Vi, Y, s_indices, r_indices,
 
     if(length(s_indices) > 0) {
         
-        if(n >= p) {
-            M <- crossprod(resid, resid)  +
-                crossprod(prior_diff, Lambda0 %*% prior_diff) 
-            MV2 <- M %*% Vs2
-            if(ncol(Vs2) > 0)
-                VMVinv <- solve(t(Vs2) %*% M %*% Vs2)
-            else
-                VMVinv <- matrix(ncol=0, nrow=0)
-            
-            A <- t(NullVfixed) %*%
-                (M - MV2 %*% VMVinv %*% t(MV2)) %*%
-                NullVfixed
-            
-            Gpart <- (n + s + v1 + 1 - q) * (A %*% Vs1 %*% solve(t(Vs1) %*% A %*% Vs1))
-        } else {
+        ## More efficient than commented part
 
-            ## More efficient than commented part
+        rVs1 <- RN %*% Vs1
+        pVs1 <- LPN %*% Vs1
 
-            rVs1 <- RN %*% Vs1
-            pVs1 <- LPN %*% Vs1
+        W <- (crossprod(rVs1, rVs2) + crossprod(pVs1, pVs2))
 
-            W <- (crossprod(rVs1, rVs2) + crossprod(pVs1, pVs2))
+        Vs1AVs1inv <- solve(crossprod(rVs1) + crossprod(pVs1) -
+                            W %*% VMVinv_s %*% t(W))
 
-            Vs1AVs1inv <- solve(crossprod(rVs1) + crossprod(pVs1) -
-                                W %*% VMVinv_s %*% t(W))
-
-            AVs1 <- crossprod(RN, rVs1) + crossprod(LPN, pVs1) -
-                tcrossprod(AVs_part, W)
-            
-            Gpart <- (n + s + v1 + 1 - q) * AVs1 %*% Vs1AVs1inv
-        }
+        AVs1 <- crossprod(RN, rVs1) + crossprod(LPN, pVs1) -
+            tcrossprod(AVs_part, W)
+        
+        Gpart <- (n + s + v1 + 1 - q) * AVs1 %*% Vs1AVs1inv
 
     } else {
         Gpart <- matrix(0, nrow=ncol(NullVfixed),

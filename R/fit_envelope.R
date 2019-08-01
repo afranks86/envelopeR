@@ -25,6 +25,11 @@ fit_envelope <- function(Y, X, distn = "normal", ...){
         normal_fit <- optimize_envelope(Y, X, ...)
         normal_fit 
         
+    } else if (distn == "covreg") {
+
+        cook_fit <- optimize_envelope_covreg(Y, X, ...)
+        cook_fit
+        
     } else if (distn == "cook") {
 
         cook_fit <- optimize_envelope_cook(Y, X, ...)
@@ -141,95 +146,9 @@ optimize_envelope <- function(Y, X, D = diag(ncol(Y)),
     ## chunks can only be as large as s+r
     if(nchunks > s + r)
         nchunks <- s + r
-
-    
-    ## m1 <- median(svd(resid)$d)^2
-    ## m0 <- median(svd(Y)$d)^2
-    
-    ## shrinkage_coefs <- lw_shrinkage(resid)
-
-    ## U0 <- diag(shrinkage_coefs$m, nrow=r)
-    ## U1 <- diag(shrinkage_coefs$m, nrow=s)
-
-    ## shrinkage_factor <- shrinkage_coefs$b2 / shrinkage_coefs$d2
-    ## v1 <- shrinkage_factor / (1 - shrinkage_factor) * n
-    ## v0 <- v1
-    
     
     prior_diff <- Beta0 - beta_hat 
     ## compute negative log-likelihood
-
-    ## if(n >= p) {
-    ##     M <- t(Y) %*% Y
-    ##     MV2 <- M %*% Vr2
-    ##     if(ncol(Vr2) > 0)
-    ##         VMVinv <- solve(t(Vr2) %*% M %*% Vr2)
-    ##     else
-    ##         VMVinv <- matrix(nrow=0, ncol=0)
-
-    ##     A <- t(NullVfixed) %*%
-    ##         (M - MV2 %*% VMVinv %*% t(MV2)) %*%
-    ##         NullVfixed
-    
-    ## } else {
-
-    ##     YNR1 <- Y %*% NullVfixed %*% Vr1
-    ##     YR2 <- (Y %*% Vr2)
-    ##     M <- t(YNR1) %*% YNR1
-    ##     if(ncol(Vr2) > 0)
-    ##         VMVinv <- solve(t(YR2) %*% YR2)
-    ##     else
-    ##         VMVinv <- matrix(nrow=0, ncol=0)
-
-    ##     VAVinv <- solve((M - t(YNR1) %*% YR2 %*%
-    ##                      VMVinv %*% t(YR2) %*% YNR1))
-
-    ## }
-    
-
-    ## F_factory <- function(V, Y_tilde, resid_tilde, prior_diff_tilde) {
-    ##     G <- V[, 1:s, drop=FALSE]
-    ##     if(r > 0) {
-    ##         G0 <- V[, (s+1):(s+r)]
-    ##         YG0 <- Y_tilde %*%  G0
-    ##         G0part <- as.numeric((n + r + v0 - 1)/2 *
-    ##                              determinant(crossprod(YG0) + U0,
-    ##                                          logarithm = TRUE)$modulus)
-
-    ##         if(r + s < p){
-    ##             YV <- Y_tilde %*% V
-    ##             sig2part <- (n*(p-s-r)/2 + alpha) *
-    ##                 log(sum(Y_tilde^2)/2 - sum(YV^2)/2 + nu)
-    ##         } else {
-    ##             sig2part <- 0
-    ##         }
-            
-    ##     } else {
-    ##         G0part <- 0
-
-    ##         if(r + s < p){ 
-    ##             YV <- Y_tilde %*% V
-    ##             sig2part <- (n*(p-s-r)/2 + alpha) *
-    ##                 log(sum(Y_tilde^2) / 2 - sum(YV^2)/2 + nu)
-    ##         } else {
-    ##             sig2part <- 0
-    ##         }
-            
-    ##     }
-
-
-    ##     rG <- resid_tilde %*% G
-    ##     Gpart <- as.numeric((n + s + v1 + 1 - q)/2 *
-    ##                         determinant(crossprod(rG) +
-    ##                                     t(prior_diff_tilde %*% G) %*% Lambda0 %*%
-    ##                                     (prior_diff_tilde %*% G) + U1, logarithm = TRUE)$modulus)
-        
-    ##     ## Minimize the negative log likelihood
-    ##     1/n * (Gpart + G0part + sig2part) + L * sum(sqrt(rowSums(V[, 1:s]^2)))
-    ## }
-
-    ## Define F using the factory
-    ## F <- function(V) { F_factory(V, Y, resid, prior_diff) }
 
     
         
@@ -241,65 +160,13 @@ optimize_envelope <- function(Y, X, D = diag(ncol(Y)),
     F <- function(Vcur) do.call(F_norm, c(list(V=Vcur), pars))
     dF <- function(Vcur) do.call(dF_norm, c(list(V=Vcur), pars))
 
-
-
-    ## compute gradient of negative log-likelihood
-    ## dF <- function(V) {
-
-    ##     G <- V[, 1:s, drop=FALSE]
-
-    ##     rG <- resid %*% G
-
-    ##     Gpart <- (n + s + v1 + 1 - q) * (t(resid) %*% rG + t(prior_diff) %*% Lambda0 %*%
-    ##                                      (prior_diff  %*% G)) %*%
-    ##         solve(crossprod(rG) + t(prior_diff %*% G) %*% Lambda0 %*%
-    ##               (prior_diff %*% G) + U1)
-
-    ##     if(r > 0) {
-    ##         G0 <- V[, (s+1):(s+r)]
-    ##         YG0 <- Y %*%  G0
-    ##         G0part <- (n + r + v0 - 1) * t(Y) %*% (Y %*% G0) %*%
-    ##             solve(crossprod(YG0) + U0)
-    ##     } else {
-    ##         G0part <- matrix(0, nrow=nrow(V), ncol=0)
-    ##     }
-
-    ##     if(r + s < p){
-    ##         YV <- Y %*% V
-    ##         sig2part <- (n*(p-s-r) + 2*alpha) /
-    ##             (sum(Y^2)/2 - sum(YV^2)/2 + nu) * t(Y) %*% YV
-    ##     } else {
-    ##         sig2part <- matrix(0, nrow=p, ncol=s+r)
-    ##     }
-        
-    ##     dV <- cbind(Gpart, matrix(0, nrow=p, ncol=r)) +
-    ##         cbind(matrix(0, nrow=p, ncol=s), G0part) +
-    ##         sig2part
-
-    ##     if(L > 0) {
-    ##         spart <- L * V[, 1:s]  / matrix(sqrt(rowSums(V[, 1:s]^2)),
-    ##                                         nrow=p, ncol=s, byrow=FALSE)
-    ##         Lpenalty <- cbind(spart, matrix(0, nrow=p, ncol=r))
-    ##     } else {
-    ##         Lpenalty <- 0
-    ##     }
-
-        
-    ##     ## negative ll grad
-    ##     -1/n * dV + Lpenalty
-
-        
-    ## }
     
     V <- Vinit
-    ## (Until convergence do)
+
     
     max_count <- Inf
     count <- 1
 
-    ## if(nchunks == ncol(V)) {
-    ##     stop("nchunks = ncol(V).  Don't use _kd opt.")
-    ## }
 
     Vprev <- matrix(Inf, nrow=nrow(V), ncol=ncol(V))
     Fcur <- F(V)
@@ -400,24 +267,37 @@ optimize_envelope <- function(Y, X, D = diag(ncol(Y)),
                 AVr_part <- (t(RN) %*% (rVr2) + t(LPN) %*% pVr2) %*% VMVinv_r
                 
                 ## Vi is a (p-nchunks) x (s+r) dim matrix
-                
-                if(length(s_indices) > 0)
-                    NV[, s_indices] <- Vi[, 1:length(s_indices), drop=FALSE]
-                if(length(r_indices) > 0)
-                    NV[, r_indices] <- Vi[, (length(s_indices)+1):length(indices), drop=FALSE]
-
                 pars_i <- pars
                 pars_i$Y <- YN
                 pars_i$resid <- RN
                 pars_i$prior_diff <- PN
                 
-                Fi <- function(Vi)  do.call(F_norm, c(list(V=Vi), pars_i))
+                Fi <- function(Vi)  {
+                    if(length(s_indices) > 0)
+                        NV[, s_indices] <- Vi[, 1:length(s_indices), drop=FALSE]
+                    if(length(r_indices) > 0)
+                        NV[, r_indices] <- Vi[, (length(s_indices)+1):length(indices), drop=FALSE]
+                    do.call(F_norm, c(list(V=NV), pars_i))
+                }
 
-                dFi <- function(Vi) do.call(dFi_norm,
-                                              c(list(V=Vi,
-                                                     s_indices=s_indices,
-                                                     r_indices=r_indices),
-                                                pars))
+                pars_dfi <- c(pars_i,
+                              list(AVs_part=AVs_part, AVr_part=AVr_part,
+                                   LPN = LPN,
+                                   rVr2=rVr2, pVr2=pVr2, VMVinv_r=VMVinv_r,
+                                   rVs2=rVs2, pVs2=pVs2,
+                                   VMVinv_s = VMVinv_s, indices,
+                                   s_indices=s_indices, r_indices=r_indices,
+                                   YN=YN, RN=RN))
+                pars_dfi$Y <- Y
+                pars_dfi$resid <- NULL
+                                 
+
+                ## dFi_norm function in envelope_functions.R
+                dFi <- function(Vi) { do.call(dFi_norm,
+                                            c(list(Vi=Vi),
+                                              pars_dfi))
+                }
+
 
                 print(sprintf("------ F(V) = %f --------", F(V)))
                 Vi_fit <- rstiefel::optStiefel(
@@ -762,12 +642,12 @@ if(FALSE) {
 
     res <- fit_envelope(Y, X, s=s, r=0,
                         distn="normal",
-                        nchunks=4,
+                        nchunks=1,
                         Vinit="COV", use_py=FALSE,
                         maxIters=10000,
-                        searchParams=list(rho=1e-5, eta=0.99),
-                        L = 0,
-                        prior_counts = 0)
+                        searchParams=list(rho=1e-5, eta=0.9),
+                        L = 50,
+                        prior_counts = 50)
     res$F(cbind(V, U))
     res$F(rustiefel(p, s+r))
     res$F(res$V)
@@ -775,8 +655,8 @@ if(FALSE) {
 
     sum((res$beta_ols - beta)^2)
     sum((res$beta_env - beta)^2)
-    mean(rowSums(res$V^2) < 1e-8)
-    mean(rowSums(cbind(V, U)) < 1e-8)
+    mean(rowSums(res$V^2) < 1e-10)
+    mean(rowSums(cbind(V, U)) < 1e-10)
     
 
     
