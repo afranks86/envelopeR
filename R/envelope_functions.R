@@ -194,7 +194,22 @@ dFi_norm <- function(Vi, Y, YN, indices, s_indices, r_indices,
 ######################### Covariance Regression ##################
 
 
-F_cov_reg <- function(V, Y, resid, prior_diff, SigInvXList, etaSigXList) {
+#' Title
+#'
+#' @param V current basis for the subspace of relevant variation
+#' @param Y n x p data matrix
+#' @param resid n x p residual matrix
+#' @param SigInvXList list of length n with entries E[Sigma(X_i)^{-1}]
+#' @param etaSigXList list of length n with entries E[eta^T * Sigma(X_i)^{-1}]
+#' @param prior_diff 
+#'
+#' 
+#' @return
+#' @export
+#'
+#' @examples
+F_cov_reg <- function(V, Y, resid, n, p, s, r, q, SigInvXList, etaSigXList, 
+                      U1, U0, v1, v0, prior_diff, Lambda0, alpha, nu, L) {
 
     G <- V[, 1:s, drop=FALSE]
     if(r > 0) {
@@ -227,11 +242,12 @@ F_cov_reg <- function(V, Y, resid, prior_diff, SigInvXList, etaSigXList) {
 
     
     ##
+
     Gpart <- 0
     for(i in 1:n) {
         YG <- Y[i, ] %*% G
-        YGSiginvYG <- crossprod(YG, (YG %*% SigInvXList[[i]]))
-        Gpart <- Gpart + 1/2*(YGSigInvYG -  2 * tcrossprod((x[i, ] %*% etaSigXList[[i]]), YG))
+        YGSigInvYG <- tcrossprod(YG, (YG %*% SigInvXList[[i]]))
+        Gpart <- Gpart + 1/2*(YGSigInvYG -  2 * tcrossprod((X[i, ] %*% etaSigXList[[i]]), YG))
     }
     
     ## Minimize the negative log likelihood
@@ -239,16 +255,18 @@ F_cov_reg <- function(V, Y, resid, prior_diff, SigInvXList, etaSigXList) {
 
 }
 
-dF_cov_reg <- function(V, Y_tilde, resid_tilde, prior_diff_tilde,
-                       SigInvXList, etaSigXList) {
+dF_cov_reg <- function(V, Y, resid, n, p, s, r, q, SigInvXList, etaSigXList, 
+                      U1, U0, v1, v0, prior_diff, Lambda0, alpha, nu, L) {
 
+
+    ## For covariance regression
     G <- V[, 1:s, drop=FALSE]
-
     Gpart <- matrix(0, nrow=p, ncol=s)
     for(i in 1:n) {
         YG <- Y[i, ] %*% G
-        Gpart <- crossprod(Y[i,], YG) %*% SigInvXList[[i]] -
-            crossprod(Y[i, ], X[i, ] %*% etaSigXList[[i]])
+        Gpart <- Gpart +
+            crossprod(Y[i, , drop=FALSE], YG) %*% SigInvXList[[i]] -
+            crossprod(Y[i, , drop=FALSE], X[i, ] %*% etaSigXList[[i]])
     }
 
     if(r > 0) {
@@ -286,12 +304,89 @@ dF_cov_reg <- function(V, Y_tilde, resid_tilde, prior_diff_tilde,
     
 }
 
+covariance_regression_estep <- function(YV, X,  sm, method="vb") {
+
+    print("Starting e-step sampling...")
+    s  <- ncol(YV)
+    q  <- ncol(X)
+    n  <- nrow(YV)
+    
+    data_list <- list(s=s, q=q, n=n, X=X, Y=YV)
+    if(method == "vb") {
+        stan_fit <- rstan::vb(sm, data=data_list)
+    } else {
+        stan_fit  <- rstan::sampling(sm, data=data_list)
+    }
+    print("Finished e-step sampling...")
+    
+    nsamples  <- dim(stan_fit)[[1]]
+    
+    SigInvList  <- list(nrow(YV))
+    etaSigInvList  <- list(nrow(YV))
+    samples <- rstan::extract(stan_fit)
+    for(i in 1:nrow(X)) {
+        SigInvSamples  <- lapply(1:nsamples, function(s) {
+            A  <- samples$A[s, ,]
+            L  <- samples$gamma[s, ,] %*%  X[i, ]
+            SigInv  <- solve(tcrossprod(L) + A)
+        })
+        SigInvList[[i]]  <- Reduce(`+`, SigInvSamples)/nsamples
+        eta  <- samples$beta
+        etaSigInvSamples  <- lapply(1:nsamples, function(s) {
+            t(eta[s, , ]) %*%  SigInvSamples[[s]]
+        })
+        
+        etaSigInvList[[i]]  <- Reduce(`+`, etaSigInvSamples)/nsamples
+    }
+    
+    list(SigInvList = SigInvList, etaSigInvList = etaSigInvList,
+         samples=samples)
+    
+    
+}
 
 
+covariance_regression_mstep <- function(Vcur, searchParams, maxIters, pars) {
 
 
+    F <- function(Vcur) do.call(F_cov_reg, c(list(V=Vcur), pars))
+    dF <- function(Vcur) do.call(dF_cov_reg, c(list(V=Vcur), pars))
 
+    V <- Vcur
+    
+    max_count <- Inf
+    count <- 1
 
+    Vprev <- matrix(Inf, nrow=nrow(V), ncol=ncol(V))
+    Fcur <- F(V)
+    Fprev <- Fcur + abs(Fcur)
+    Finit <- Fprev
+    tol_f <- 1e-8
+    tol_v <- 1e-8
+    
+    Fprev <- F(V)
+    Vprev <- V
+
+    print(sprintf("------ F(V) = %f --------", F(V)))
+
+    Vfit <- rstiefel::optStiefel(
+                          F,
+                          dF,
+                          method = "bb",
+                          Vinit = V,
+                          verbose = TRUE,
+                          maxIters = maxIters,
+                          maxLineSearchIters = 25,
+                          searchParams = searchParams
+                      )
+
+    list(V = Vfit, Fcur = F(Vfit))
+        
+    
+    ## Fcur <- F(V)        
+    ## count <- count + 1    
+
+}
 
 
 
