@@ -426,9 +426,10 @@ optimize_envelope_covreg <- function(Y, X,
     prior_diff <- Beta0 - beta_hat 
     ## compute negative log-likelihood
 
-    print("Compiling Stan Model...")
-    sm  <- rstan::stan_model(file="src/stan_files/cov_regression.stan")
-    
+    ## print("Compiling Stan Model...")
+    ## sm  <- rstan::stan_model(file="src/stan_files/cov_regression.stan")
+    sm  <- NULL
+
     ## Need to initialize these
     eta  <- beta_hat %*% Vinit
     z <- (Y - X %*% beta_hat) %*% Vinit
@@ -457,9 +458,9 @@ optimize_envelope_covreg <- function(Y, X,
     Finit <- Fprev
     tol_f <- 1e-8
     tol_v <- 1e-8
-    
-    while((Fprev-Fcur) / (abs(Finit - Fcur) + 1) > tol_f &
-          sqrt(sum((Vprev - V)^2)/n) > tol_v & count < max_count) {
+
+  ## (Fprev-Fcur) / (abs(Finit - Fcur) + 1) > tol_f &
+    while(sqrt(sum((Vprev - V)^2)/n) > tol_v & count < max_count) {
 
               start  <- Sys.time()
               
@@ -469,8 +470,8 @@ optimize_envelope_covreg <- function(Y, X,
               ## E - Step
               YV  <- Y %*% V
               estep  <- covariance_regression_estep(YV=YV, X=X,
-                                                    sm=sm,
-                                                    method="vb")
+                                                    method="covreg",
+                                                    sm=sm)
               
 
               SigInvXList  <-  estep$SigInvList
@@ -494,8 +495,7 @@ optimize_envelope_covreg <- function(Y, X,
               print(sprintf("F(V) = %f, time = %s", Fcur, Sys.time() - start))
               count <- count + 1
 
-
-          }
+    }
 
     Yproj <- Y %*% V[, 1:s]
     eta_hat_env <- solve(t(X) %*% X + Lambda0) %*% t(X) %*% Yproj
@@ -503,7 +503,8 @@ optimize_envelope_covreg <- function(Y, X,
 
     
     list(V=V, intercept=intercept, beta_ols=beta_hat,
-         beta_env=beta_env, eta_hat=eta_hat_env, F=F, dF=dF)
+         beta_env=beta_env, eta_hat=eta_hat_env, F=F, dF=dF,
+         covariance_list = estep)
     
 }
 
@@ -1172,12 +1173,6 @@ if(FALSE) {
 
     A2 <- Sstar - Sigma
     tr(A2 %*% t(A2))/p
-
-
-
-
-
-
 
     n <- 200
     p <- 10

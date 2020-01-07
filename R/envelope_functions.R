@@ -304,7 +304,7 @@ dF_cov_reg <- function(V, Y, resid, n, p, s, r, q, SigInvXList, etaSigXList,
     
 }
 
-covariance_regression_estep <- function(YV, X,  sm, method="vb") {
+covariance_regression_estep <- function(YV, X,  method="covreg", sm=NULL) {
 
     print("Starting e-step sampling...")
     s  <- ncol(YV)
@@ -312,37 +312,79 @@ covariance_regression_estep <- function(YV, X,  sm, method="vb") {
     n  <- nrow(YV)
     
     data_list <- list(s=s, q=q, n=n, X=X, Y=YV)
-    if(method == "vb") {
-        stan_fit <- rstan::vb(sm, data=data_list)
-    } else {
-        stan_fit  <- rstan::sampling(sm, data=data_list)
-    }
-    print("Finished e-step sampling...")
-    
-    nsamples  <- dim(stan_fit)[[1]]
-    
+    nsamples  <- 1000
+
     SigInvList  <- list(nrow(YV))
     etaSigInvList  <- list(nrow(YV))
-    samples <- rstan::extract(stan_fit)
-    for(i in 1:nrow(X)) {
-        SigInvSamples  <- lapply(1:nsamples, function(s) {
-            A  <- samples$A[s, ,]
-            L  <- samples$gamma[s, ,] %*%  X[i, ]
-            SigInv  <- solve(tcrossprod(L) + A)
-        })
-        SigInvList[[i]]  <- Reduce(`+`, SigInvSamples)/nsamples
-        eta  <- samples$beta
-        etaSigInvSamples  <- lapply(1:nsamples, function(s) {
-            t(eta[s, , ]) %*%  SigInvSamples[[s]]
-        })
+
+    if(method == "covreg") {
+        cov_reg_fit  <- covreg::covreg.mcmc(YV ~ X - 1, YV ~ X - 1)
+
+        gsamps  <- cov_reg_fit$B2.psamp[, , 1, ]
+        bsamps  <- cov_reg_fit$B1.psamp
+        asamps  <- cov_reg_fit$A.psamp
+        samples  <- list(A = asamps, gamma = gsamps, beta=bsamps)
+        for(i in 1:nrow(X)) {
+            SigInvSamples  <- lapply(1:nsamples, function(s) {
+                A  <- asamps[, , s]
+                L  <- gsamps[, , s] %*%  X[i, ]
+                SigInv  <- solve(tcrossprod(L) + A)
+            })
+            SigInvList[[i]]  <- Reduce(`+`, SigInvSamples)/nsamples
+            etaSigInvSamples  <- lapply(1:nsamples, function(s) {
+                t(bsamps[, , s]) %*%  SigInvSamples[[s]]
+            })
+
+            etaSigInvList[[i]]  <- Reduce(`+`, etaSigInvSamples)/nsamples
+        }
         
-        etaSigInvList[[i]]  <- Reduce(`+`, etaSigInvSamples)/nsamples
+    } else if(method == "vb") {
+
+        if(is.null(sm))
+            stop("Must specify Stan model")
+
+        stan_fit <- rstan::vb(sm, data=data_list)
+        samples <- rstan::extract(stan_fit)
+        for(i in 1:nrow(X)) {
+            SigInvSamples  <- lapply(1:nsamples, function(s) {
+                A  <- samples$A[s, ,]
+                L  <- samples$gamma[s, ,] %*%  X[i, ]
+                SigInv  <- solve(tcrossprod(L) + A)
+            })
+            SigInvList[[i]]  <- Reduce(`+`, SigInvSamples)/nsamples
+            eta  <- samples$beta
+            etaSigInvSamples  <- lapply(1:nsamples, function(s) {
+                t(eta[s, , ]) %*%  SigInvSamples[[s]]
+            })
+
+            etaSigInvList[[i]]  <- Reduce(`+`, etaSigInvSamples)/nsamples
+        }
+        
+    } else {
+        if(is.null(sm))
+            stop("Must specify Stan model")
+
+        stan_fit  <- rstan::sampling(sm, data=data_list)
+        samples <- rstan::extract(stan_fit)
+        for(i in 1:nrow(X)) {
+            SigInvSamples  <- lapply(1:nsamples, function(s) {
+                A  <- samples$A[s, ,]
+                L  <- samples$gamma[s, ,] %*%  X[i, ]
+                SigInv  <- solve(tcrossprod(L) + A)
+            })
+            SigInvList[[i]]  <- Reduce(`+`, SigInvSamples)/nsamples
+            eta  <- samples$beta
+            etaSigInvSamples  <- lapply(1:nsamples, function(s) {
+                t(eta[s, , ]) %*%  SigInvSamples[[s]]
+            })
+
+            etaSigInvList[[i]]  <- Reduce(`+`, etaSigInvSamples)/nsamples
+        }
     }
-    
+    print("Finished e-step sampling...")
+
     list(SigInvList = SigInvList, etaSigInvList = etaSigInvList,
          samples=samples)
-    
-    
 }
 
 
@@ -382,14 +424,4 @@ covariance_regression_mstep <- function(Vcur, searchParams, maxIters, pars) {
 
     list(V = Vfit, Fcur = F(Vfit))
         
-    
-    ## Fcur <- F(V)        
-    ## count <- count + 1    
-
 }
-
-
-
-
-
-
