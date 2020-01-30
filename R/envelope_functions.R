@@ -208,7 +208,7 @@ dFi_norm <- function(Vi, Y, YN, indices, s_indices, r_indices,
 #' @export
 #'
 #' @examples
-F_cov_reg <- function(V, Y, resid, n, p, s, r, q, SigInvXList, etaSigXList, 
+F_cov_reg <- function(V, Y, resid, X, n, p, s, r, q, SigInvXList, etaSigXList,
                       U1, U0, v1, v0, prior_diff, Lambda0, alpha, nu, L) {
 
     G <- V[, 1:s, drop=FALSE]
@@ -255,7 +255,7 @@ F_cov_reg <- function(V, Y, resid, n, p, s, r, q, SigInvXList, etaSigXList,
 
 }
 
-dF_cov_reg <- function(V, Y, resid, n, p, s, r, q, SigInvXList, etaSigXList, 
+dF_cov_reg <- function(V, Y, resid, X, n, p, s, r, q, SigInvXList, etaSigXList,
                       U1, U0, v1, v0, prior_diff, Lambda0, alpha, nu, L) {
 
 
@@ -318,21 +318,18 @@ covariance_regression_estep <- function(YV, X,  method="covreg", sm=NULL) {
     etaSigInvList  <- list(nrow(YV))
 
     if(method == "covreg") {
-        cov_reg_fit  <- covreg::covreg.mcmc(YV ~ X - 1, YV ~ X - 1)
+        cov_reg_fit  <- covreg::covreg.mcmc(YV ~ X - 1, YV ~ X)
 
-        gsamps  <- cov_reg_fit$B2.psamp[, , 1, ]
-        bsamps  <- cov_reg_fit$B1.psamp
-        asamps  <- cov_reg_fit$A.psamp
-        samples  <- list(A = asamps, gamma = gsamps, beta=bsamps)
+        cov_psamp  <- covreg::cov.psamp(cov_reg_fit)
+        m_psamp  <- covreg::m.psamp(cov_reg_fit)
+
         for(i in 1:nrow(X)) {
             SigInvSamples  <- lapply(1:nsamples, function(s) {
-                A  <- asamps[, , s]
-                L  <- gsamps[, , s] %*%  X[i, ]
-                SigInv  <- solve(tcrossprod(L) + A)
+                SigInv  <- solve(cov_psamp[i, , , s])
             })
             SigInvList[[i]]  <- Reduce(`+`, SigInvSamples)/nsamples
             etaSigInvSamples  <- lapply(1:nsamples, function(s) {
-                t(bsamps[, , s]) %*%  SigInvSamples[[s]]
+                t(m_psamp[i, , s]) %*%  SigInvSamples[[s]]
             })
 
             etaSigInvList[[i]]  <- Reduce(`+`, etaSigInvSamples)/nsamples
