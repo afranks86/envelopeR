@@ -438,7 +438,7 @@ optimize_envelope_covreg <- function(Y, X,
     SigInvXList  <-  lapply(1:n, function(i) sig_inv)
     etaSigXList  <-  lapply(1:n, function(i) eta %*% sig_inv)
 
-    pars <- list(Y=Y, resid=resid, n=n, p=p, s=s, r=r,
+    pars <- list(Y=Y, resid=resid, X=X, n=n, p=p, s=s, r=r,
                  SigInvXList=SigInvXList, etaSigXList = etaSigXList,
                  U1=U1, U0=U0, v1=v1, v0=v0, q=q,
                  prior_diff=prior_diff,
