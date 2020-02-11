@@ -357,8 +357,8 @@ optimize_envelope_covreg <- function(Y, X,
     
     intercept <- rep(0, ncol(Y))
     if(center) {
-        intercept <- colMeans(Y)
-        Y <- scale(Y, scale=FALSE)
+      intercept <- colMeans(Y)
+      Y <- scale(Y, scale=FALSE)
     } else {
         intercept <- rep(0, ncol(Y))
     }
@@ -436,10 +436,10 @@ optimize_envelope_covreg <- function(Y, X,
     sig_inv  <- solve(t(z) %*% z)
     
     SigInvXList  <-  lapply(1:n, function(i) sig_inv)
-    etaSigXList  <-  lapply(1:n, function(i) eta %*% sig_inv)
+    muSigXList  <-  lapply(1:n, function(i) X[i, ]  %*% eta %*% sig_inv)
 
     pars <- list(Y=Y, resid=resid, X=X, n=n, p=p, s=s, r=r,
-                 SigInvXList=SigInvXList, etaSigXList = etaSigXList,
+                 SigInvXList=SigInvXList, muSigXList = muSigXList,
                  U1=U1, U0=U0, v1=v1, v0=v0, q=q,
                  prior_diff=prior_diff,
                  Lambda0=Lambda0, L=L, alpha=alpha, nu=nu)
@@ -475,10 +475,10 @@ optimize_envelope_covreg <- function(Y, X,
               
 
               SigInvXList  <-  estep$SigInvList
-              etaSigXList  <-  estep$etaSigInvList
+              muSigXList  <-  estep$muSigInvList
               
-              pars <- list(Y=Y, resid=resid, n=n, p=p, s=s, r=r, q=q,
-                           SigInvXList=SigInvXList, etaSigXList = etaSigXList,
+              pars <- list(Y=Y, resid=resid, X=X, n=n, p=p, s=s, r=r, q=q,
+                           SigInvXList=SigInvXList, muSigXList = muSigXList,
                            U1=U1, U0=U0, v1=v1, v0=v0,
                            prior_diff=prior_diff,
                            Lambda0=Lambda0, alpha=alpha, nu=nu, L=L)
@@ -497,10 +497,17 @@ optimize_envelope_covreg <- function(Y, X,
 
     }
 
-    Yproj <- Y %*% V[, 1:s]
+  Yproj <- Y %*% V[, 1:s]
+
+    estep  <- covariance_regression_estep(YV=Yproj, X=X,
+                                          method="covreg",
+                                          sm=sm)
+
+
+
     eta_hat_env <- solve(t(X) %*% X + Lambda0) %*% t(X) %*% Yproj
     beta_env <- eta_hat_env %*% t(V[, 1:s])
-
+  rownames(V)  <- colnames(Y)
     
     list(V=V, intercept=intercept, beta_ols=beta_hat,
          beta_env=beta_env, eta_hat=eta_hat_env, F=F, dF=dF,

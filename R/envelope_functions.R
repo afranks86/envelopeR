@@ -200,15 +200,15 @@ dFi_norm <- function(Vi, Y, YN, indices, s_indices, r_indices,
 #' @param Y n x p data matrix
 #' @param resid n x p residual matrix
 #' @param SigInvXList list of length n with entries E[Sigma(X_i)^{-1}]
-#' @param etaSigXList list of length n with entries E[eta^T * Sigma(X_i)^{-1}]
+#' @param muSigXList list of length n with entries E[eta^T * Sigma(X_i)^{-1}]
 #' @param prior_diff 
 #'
 #' 
 #' @return
-#' @export
+#' @export F_cov_reg
 #'
 #' @examples
-F_cov_reg <- function(V, Y, resid, X, n, p, s, r, q, SigInvXList, etaSigXList,
+F_cov_reg <- function(V, Y, resid, X, n, p, s, r, q, SigInvXList, muSigXList,
                       U1, U0, v1, v0, prior_diff, Lambda0, alpha, nu, L) {
 
     G <- V[, 1:s, drop=FALSE]
@@ -243,11 +243,13 @@ F_cov_reg <- function(V, Y, resid, X, n, p, s, r, q, SigInvXList, etaSigXList,
     
     ##
 
-    Gpart <- 0
+  Gpart <- 0
+
     for(i in 1:n) {
-        YG <- Y[i, ] %*% G
+      YG <- Y[i, ] %*% G
+
         YGSigInvYG <- tcrossprod(YG, (YG %*% SigInvXList[[i]]))
-        Gpart <- Gpart + 1/2*(YGSigInvYG -  2 * tcrossprod((X[i, ] %*% etaSigXList[[i]]), YG))
+        Gpart <- Gpart + 1/2*(YGSigInvYG -  2 * tcrossprod(muSigXList[[i]], YG))
     }
     
     ## Minimize the negative log likelihood
@@ -255,7 +257,7 @@ F_cov_reg <- function(V, Y, resid, X, n, p, s, r, q, SigInvXList, etaSigXList,
 
 }
 
-dF_cov_reg <- function(V, Y, resid, X, n, p, s, r, q, SigInvXList, etaSigXList,
+dF_cov_reg <- function(V, Y, resid, X, n, p, s, r, q, SigInvXList, muSigXList,
                       U1, U0, v1, v0, prior_diff, Lambda0, alpha, nu, L) {
 
 
@@ -266,7 +268,7 @@ dF_cov_reg <- function(V, Y, resid, X, n, p, s, r, q, SigInvXList, etaSigXList,
         YG <- Y[i, ] %*% G
         Gpart <- Gpart +
             crossprod(Y[i, , drop=FALSE], YG) %*% SigInvXList[[i]] -
-            crossprod(Y[i, , drop=FALSE], X[i, ] %*% etaSigXList[[i]])
+            crossprod(Y[i, , drop=FALSE], muSigXList[[i]])
     }
 
     if(r > 0) {
@@ -304,35 +306,49 @@ dF_cov_reg <- function(V, Y, resid, X, n, p, s, r, q, SigInvXList, etaSigXList,
     
 }
 
-covariance_regression_estep <- function(YV, X,  method="covreg", sm=NULL) {
+#' Covariance Regression Estep
+#'
+#' @param YV 
+#' @param X 
+#' @param method 
+#' @param niter 
+#' @param nthin 
+#'
+#' @return
+#' @export covariance_regression_estep
+#'
+#' @examples
+covariance_regression_estep <- function(YV, X,  method="covreg", cov_dim=ncol(YV), niter=1000, nthin=10, sm=NULL) {
 
     print("Starting e-step sampling...")
     s  <- ncol(YV)
     q  <- ncol(X)
     n  <- nrow(YV)
     
-    data_list <- list(s=s, q=q, n=n, X=X, Y=YV)
-    nsamples  <- 1000
+  data_list <- list(s=s, q=q, n=n, X=X, Y=YV)
 
     SigInvList  <- list(nrow(YV))
-    etaSigInvList  <- list(nrow(YV))
+    muSigInvList  <- list(nrow(YV))
 
     if(method == "covreg") {
-        cov_reg_fit  <- covreg::covreg.mcmc(YV ~ X - 1, YV ~ X)
+        cov_reg_fit  <- covreg::covreg.mcmc(YV ~ X - 1, YV ~ X, R=cov_dim, niter=niter, nthin=nthin)
+        nsamples  <- niter/nthin
 
         cov_psamp  <- covreg::cov.psamp(cov_reg_fit)
         m_psamp  <- covreg::m.psamp(cov_reg_fit)
 
+        indices  <- sapply(1:nrow(X), function(i) which(apply(unique(X), 1, function(x) all.equal(x, X[i, ]) == "TRUE")))
+
         for(i in 1:nrow(X)) {
             SigInvSamples  <- lapply(1:nsamples, function(s) {
-                SigInv  <- solve(cov_psamp[i, , , s])
+                SigInv  <- solve(cov_psamp[indices[i], , , s])
             })
             SigInvList[[i]]  <- Reduce(`+`, SigInvSamples)/nsamples
-            etaSigInvSamples  <- lapply(1:nsamples, function(s) {
-                t(m_psamp[i, , s]) %*%  SigInvSamples[[s]]
+            muSigInvSamples  <- lapply(1:nsamples, function(s) {
+                t(m_psamp[indices[i], , s]) %*%  SigInvSamples[[s]]
             })
 
-            etaSigInvList[[i]]  <- Reduce(`+`, etaSigInvSamples)/nsamples
+            muSigInvList[[i]]  <- Reduce(`+`, muSigInvSamples)/nsamples
         }
         
     } else if(method == "vb") {
@@ -350,11 +366,11 @@ covariance_regression_estep <- function(YV, X,  method="covreg", sm=NULL) {
             })
             SigInvList[[i]]  <- Reduce(`+`, SigInvSamples)/nsamples
             eta  <- samples$beta
-            etaSigInvSamples  <- lapply(1:nsamples, function(s) {
+            muSigInvSamples  <- lapply(1:nsamples, function(s) {
                 t(eta[s, , ]) %*%  SigInvSamples[[s]]
             })
 
-            etaSigInvList[[i]]  <- Reduce(`+`, etaSigInvSamples)/nsamples
+            muSigInvList[[i]]  <- Reduce(`+`, muSigInvSamples)/nsamples
         }
         
     } else {
@@ -371,20 +387,31 @@ covariance_regression_estep <- function(YV, X,  method="covreg", sm=NULL) {
             })
             SigInvList[[i]]  <- Reduce(`+`, SigInvSamples)/nsamples
             eta  <- samples$beta
-            etaSigInvSamples  <- lapply(1:nsamples, function(s) {
+            muSigInvSamples  <- lapply(1:nsamples, function(s) {
                 t(eta[s, , ]) %*%  SigInvSamples[[s]]
             })
 
-            etaSigInvList[[i]]  <- Reduce(`+`, etaSigInvSamples)/nsamples
+            muSigInvList[[i]]  <- Reduce(`+`, muSigInvSamples)/nsamples
         }
     }
     print("Finished e-step sampling...")
 
-    list(SigInvList = SigInvList, etaSigInvList = etaSigInvList,
-         samples=samples)
+    list(SigInvList = SigInvList, muSigInvList = muSigInvList,
+         covreg_res=cov_reg_fit)
 }
 
 
+#' Covariance Regression M-step
+#'
+#' @param Vcur 
+#' @param searchParams 
+#' @param maxIters 
+#' @param pars 
+#'
+#' @return
+#' @export covariance_regression_mstep
+#'
+#' @examples
 covariance_regression_mstep <- function(Vcur, searchParams, maxIters, pars) {
 
 
