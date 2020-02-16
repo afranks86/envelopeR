@@ -172,6 +172,7 @@ rotate_basis <- function(V, samples, n1=1, n2=NULL) {
 posteriorPlot <- function(covSamps, Osamps, OmegaSamps, nsamps, obs_to_plot,
                           probRegion=0.95, hline=NULL,  ymax=NULL, type = "mag",
                           plotPoints=TRUE, polar=FALSE, legend=TRUE,
+                          legend.title = NULL,
                           col_values=NULL, alpha=1) {
 
   ngroups <- length(obs_to_plot)
@@ -191,8 +192,7 @@ posteriorPlot <- function(covSamps, Osamps, OmegaSamps, nsamps, obs_to_plot,
     ylab <- expression("(" ~ lambda[1]/lambda[2] ~ ")")
   }
 
-  if(is.null(ymax))
-    ymax <- 1.1*max(OmegaSamps/(1-OmegaSamps))
+
 
   ##plot(0, 0, xlim=c(-pi/2, pi/2),
   ##     ylim=c(0, ymax), cex=0, xlab=, ylab=ylab, xaxt="n", cex.axis=cex.axis, cex.lab=1.5)
@@ -223,6 +223,9 @@ posteriorPlot <- function(covSamps, Osamps, OmegaSamps, nsamps, obs_to_plot,
 
   posterior_summaries <- tibble(angle = group_pts_angle, eval = group_pts_eval, Group = factor(group_type))
 
+  if(is.null(ymax))
+    ymax <- 1.1*max(group_pts_eval)
+
   p <- ggplot(posterior_summaries) +
     geom_point(aes(x=angle, y=eval, col=Group), alpha=alpha) +
     theme_bw(base_size=20) + xlim(c(-pi/2, pi/2)) + ylim(c(0, ymax))
@@ -232,7 +235,13 @@ posteriorPlot <- function(covSamps, Osamps, OmegaSamps, nsamps, obs_to_plot,
   if(!legend) {
     p <- p + theme(legend.position = "none")
   } else{
-    p <- p + theme(legend.position = "top", legend.title=element_blank())
+
+    if(is.null(legend.title))
+      p <- p + theme(legend.position = "top", legend.title=element_blank())
+    else
+      p <- p + theme(legend.position = "top") + scale_colour_discrete(name=legend.title)
+
+
   }
   if(!is.null(col_values))
     p <- p + scale_color_manual(values=col_values, alpha=alpha)
