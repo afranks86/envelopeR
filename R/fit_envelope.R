@@ -347,9 +347,10 @@ optimize_envelope_covreg <- function(Y, X,
                                      U0=matrix(0, nrow=r, ncol=r),
                                      alpha=0, nu=0, nchunks = 1, L=0,
                                      center=TRUE, maxIters=1000, use_py=FALSE,
-                                     searchParams=NULL, ...) {
+                                     searchParams=NULL,
+                                     verbose_covreg = FALSE, ...) {
 
-    
+
     Y <- Y %*% D
     n <- nrow(Y)
     p <- ncol(Y)
@@ -499,14 +500,14 @@ optimize_envelope_covreg <- function(Y, X,
 
   Yproj <- Y %*% V[, 1:s]
 
-    estep  <- covariance_regression_estep(YV=Yproj, X=X,
-                                          method="covreg",
-                                          sm=sm)
+  estep  <- covariance_regression_estep(YV=Yproj, X=X,
+                                        method="covreg",
+                                        sm=sm, verb=verbose_covreg)
 
 
 
-    eta_hat_env <- solve(t(X) %*% X + Lambda0) %*% t(X) %*% Yproj
-    beta_env <- eta_hat_env %*% t(V[, 1:s])
+  eta_hat_env <- solve(t(X) %*% X + Lambda0) %*% t(X) %*% Yproj
+  beta_env <- eta_hat_env %*% t(V[, 1:s])
   rownames(V)  <- colnames(Y)
     
     list(V=V, intercept=intercept, beta_ols=beta_hat,
