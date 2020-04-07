@@ -343,12 +343,15 @@ optimize_envelope_covreg <- function(Y, X,
                                      prior_counts=0,
                                      Beta0 = matrix(0, nrow=ncol(X), ncol=ncol(Y)),
                                      v1=0, v0 = 0,
+                                     cov_dim = s,
                                      U1=matrix(0, nrow=s, ncol=s),
                                      U0=matrix(0, nrow=r, ncol=r),
                                      alpha=0, nu=0, nchunks = 1, L=0,
                                      center=TRUE, maxIters=1000, use_py=FALSE,
                                      searchParams=NULL,
-                                     verbose_covreg = FALSE, ...) {
+                                     verbose_covreg = FALSE,
+                                     fmean = NULL,
+                                     fcov = NULL, ...) {
 
 
     Y <- Y %*% D
@@ -470,9 +473,11 @@ optimize_envelope_covreg <- function(Y, X,
 
               ## E - Step
               YV  <- Y %*% V
-              estep  <- covariance_regression_estep(YV=YV, X=X,
-                                                    method="covreg",
-                                                    sm=sm)
+      estep  <- covariance_regression_estep(YV=YV, X=X,
+                                            cov_dim=cov_dim,
+                                            method="covreg",
+                                            sm=sm,
+                                            fmean=fmean, fcov=fcov)
               
 
               SigInvXList  <-  estep$SigInvList

@@ -320,7 +320,9 @@ dF_cov_reg <- function(V, Y, resid, X, n, p, s, r, q, SigInvXList, muSigXList,
 #' @examples
 covariance_regression_estep <- function(YV, X,  method="covreg",
                                         cov_dim=ncol(YV), niter=1000, nthin=10,
-                                        sm=NULL, verb=FALSE) {
+                                        sm=NULL, verb=FALSE,
+                                        fmean = NULL,
+                                        fcov = NULL, ...) {
 
   print("Starting e-step sampling...")
   s  <- ncol(YV)
@@ -332,8 +334,13 @@ covariance_regression_estep <- function(YV, X,  method="covreg",
   SigInvList  <- list(nrow(YV))
   muSigInvList  <- list(nrow(YV))
 
+  if(is.null(fmean))
+    fmean <- as.formula(YV ~ X - 1)
+  if(is.null(fcov))
+    fmean <- as.formula(YV ~ X)
+
   if(method == "covreg") {
-    cov_reg_fit  <- covreg::covreg.mcmc(YV ~ X - 1, YV ~ X, R=cov_dim,
+    cov_reg_fit  <- covreg::covreg.mcmc(fmean, fcov, R=cov_dim,
                                         niter=niter, nthin=nthin, verb=verb)
     nsamples  <- niter/nthin
 
