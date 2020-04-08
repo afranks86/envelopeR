@@ -79,13 +79,15 @@ create_plots <- function(V, samples, n1, n2=NULL, view=c(1,2), nlabeled=20,
   }
 
   obs_to_plot  <- 1:length(to_plot)
-  names(obs_to_plot)  <-  nms[to_plot]
+  names(obs_to_plot)  <-  obs_names[to_plot]
 
+  posterior_legend <- ifelse(plot_type == "both", FALSE, TRUE)
   posterior_plot <- posteriorPlot(cov_proj,
                                   Osamps_proj, omegaSamps_proj,
                                   nsamps=nsamps,
                                   obs_to_plot=obs_to_plot,
-                                  probRegion=0.95, legend=TRUE, ...)
+                                  col_values=col_values,
+                                  probRegion=0.95, legend=posterior_legend, ...)
 
 
 
@@ -228,26 +230,33 @@ posteriorPlot <- function(covSamps, Osamps, OmegaSamps, nsamps, obs_to_plot,
 
   p <- ggplot(posterior_summaries) +
     geom_point(aes(x=angle, y=eval, col=Group), alpha=alpha) +
-    theme_bw(base_size=20) + xlim(c(-pi/2, pi/2)) + ylim(c(0, ymax))
-
+    theme_bw(base_size=20) + ylim(c(0, ymax)) +
+    scale_x_continuous(limits=c(-pi/2, pi/2),
+                       breaks=c(-pi/2, -pi/4, 0, pi/4, pi/2),
+                       labels=c(expression(-pi/2), expression(-pi/4), 0,
+                                expression(pi/4), expression(pi/2)))
+  
   if(!is.null(hline))
     p <- p + geom_hline(yintercept=hline, lty=2)
   if(!legend) {
     p <- p + theme(legend.position = "none")
-  } else{
 
+  } else{
     if(is.null(legend.title))
       p <- p + theme(legend.position = "top", legend.title=element_blank())
     else
-      p <- p + theme(legend.position = "top") + scale_colour_discrete(name=legend.title)
-
-
+      p <- p + theme(legend.position = "top")
   }
   if(!is.null(col_values))
-    p <- p + scale_color_manual(values=col_values, alpha=alpha)
+    p <- p + scale_color_manual(values=col_values)
+  else
+      p  <- p + scale_colour_discrete(name=legend.title)
 
   p + ylab(ylab) + xlab(expression("angle, acos("~U[1]^T*V[1]~")")) +
-      theme(legend.title=element_blank())
+    theme(legend.title=element_blank())
+
+
+
 
 }
 
@@ -267,7 +276,7 @@ posteriorPlot <- function(covSamps, Osamps, OmegaSamps, nsamps, obs_to_plot,
 #'
 #' @examples
 covarianceBiplot <- function(Vsub, projected_samples, obs_to_plot=1:dim(projected_samples)[1],
-                             nlabeled=20, legend=TRUE, label_size=2, col_values=NULL) {
+                             nlabeled=20, legend=TRUE, legend.pos="right", legend.name="", label_size=2, col_values=NULL) {
 
   if(ncol(Vsub) != 2) {
     stop("Please provide 2-dimensional subspace")
@@ -397,7 +406,7 @@ covarianceBiplot <- function(Vsub, projected_samples, obs_to_plot=1:dim(projecte
 
 
 
-  p + theme(legend.position = "top", legend.title=element_blank())
+  p + theme(legend.position = legend.pos, legend.title=element_blank())
 
 }
 
@@ -452,5 +461,11 @@ getHullPoints <- function(nsamps, pmPsi, OmegaSamps, Osamps, type="mag",
     hullPoints <- chull(pts[1, ], pts[2, ])
 
     list(allPts=allPts[1:2, ], pts=pts[1:2, ], hullPoints=hullPoints)
+
+}
+
+steinsLoss <- function(C1, C2inv) {
+
+    sum(diag(C1 %*% C2inv)) - log(det(C1 %*% C2inv)) - nrow(C1)
 
 }
