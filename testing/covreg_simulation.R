@@ -1,14 +1,10 @@
-library(rstan)
 options(mc.cores = parallel::detectCores())
 library(tidyverse)
 library(mvtnorm)
 library(rstiefel)
 library(glmnet)
-library(mvtnorm)
 library(covreg)
 library(envelopeR)
-
-
 
 
 create_cov_eigen <- function(X, scaler=1) {
@@ -21,7 +17,7 @@ create_cov_eigen <- function(X, scaler=1) {
 
   U1 <- matrix(c(cos(theta), sin(theta), -sin(theta), cos(theta)), ncol=2)
   U2  <- diag(2)
-  U  <- Matrix::bdiag(U1, U2)
+  U  <- as.matrix(Matrix::bdiag(U1, U2))
   sig_X <- U %*% Lambda  %*% t(U)
   as.matrix(sig_X)
 
@@ -30,62 +26,59 @@ create_cov_eigen <- function(X, scaler=1) {
 ## Number of features
 p <- 100
 
-## Rank of the matrix
-s <- 4
-
 ## Number of predictors
-q <- 4
 n <- 100
-
-## sd of regression coefficients
 
 gamma_sd  <- 1
 
 ## error sd
 error_sd  <- 0.5
 
+beta_sd_vec <- 0:10
+nreps <- 100
 
-sig_x_rank <- s
+## Rank of the matrix
+qmax <- 4
 
-beta_sd_vec <- c(0, 1, 3, 5, 8, 10)
-nreps <- 1
+## dimension of v
+s <- 4
 
-score_mat  <- matrix(nrow=nreps, ncol=length(beta_sd_vec))
+score_array  <- array(dim=c(s, nreps, length(beta_sd_vec)))
 
+for(q in 2:2) {
+    for(i in 70:nreps) {
 
-for(i in 1:nreps) {
+        X <- matrix(runif(n*q, 0, 1), nrow=n, ncol=q)
+        cov_list  <- lapply(1:n, function(i) create_cov_eigen(X[i, , drop=FALSE], scaler=1))
+        V  <- rustiefel(p, s)
+        Vnull  <- rstiefel::NullC(V)
 
+        beta_mat <- matrix(runif(q*s, 1, 2), nrow=q)
 
-  X <- matrix(runif(n*q, 0, 1), nrow=n, ncol=q)
-  cov_list  <- lapply(1:n, function(i) create_cov_eigen(X[i, , drop=FALSE], scaler=1/10))
-  V  <- rustiefel(p, s)
-  Vnull  <- rstiefel::NullC(V)
+        count  <- 1
 
-  beta_mat <- matrix(runif(q*s, 1, 2), nrow=q)
+        for(beta_sd in beta_sd_vec) {
 
-  count  <- 1
+            beta <- beta_sd * beta_mat
 
-  for(beta_sd in beta_sd_vec) {
+            Z <- sapply(1:n, function(i) {
+                rmvnorm(1, X[i, ] %*% beta, sigma=cov_list[[i]])
+            }) %>% t
 
-    beta <- beta_sd * beta_mat
+            Y  <- Z %*% t(V)  +
+                matrix(rnorm(n * (p-s), sd=error_sd), nrow=n, ncol=p-s) %*% t(Vnull)
 
-    Z <- sapply(1:n, function(i) {
-      rmvnorm(1, X[i, ] %*% beta, sigma=cov_list[[i]])
-    }) %>% t
+            envfit <- fit_envelope(Y, X, distn="covreg", s=s,
+                                   Vinit="OLS")
 
+            subspace_sim  <- tr(envfit$V  %*% t(envfit$V)  %*% V  %*% t(V))/s
 
+            score_array[q, i, count]  <- subspace_sim
+            count  <- count + 1
+        }
+    }
 
-    Y  <- Z %*% t(V)  +
-      matrix(rnorm(n * (p-s), sd=error_sd), nrow=n, ncol=p-s) %*% t(Vnull)
-
-    envfit <- fit_envelope(Y, X, distn="covreg", s=s,
-                           Vinit="OLS")
-
-    subspace_sim  <- tr(envfit$V  %*% t(envfit$V)  %*% V  %*% t(V))/s
-
-    print(subspace_sim)
-    score_mat[i, count]  <- subspace_sim
-    count  <- count + 1
-  }
+    save(score_array, file="scores.Rdata")
 }
-score_mat
+
+save(score_array, file="scores.Rdata")

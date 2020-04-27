@@ -7,38 +7,17 @@ library(covreg)
 library(envelopeR)
 
 
-## create_cov_eigen <- function(X, scaler=1) {
+create_cov_eigen <- function(X, gammaList, s, scaler=1) {
+    
+    sig_X <- matrix(0, ncol=s, nrow=s)
+    for(i in 1:s) {
+        gammaX <- gammaList[[i]] %*% t(X)
+        sig_X <- sig_X + tcrossprod(gammaX)
+    }
 
-##     indices_default  <- 1:3
-##     Xnew  <- ifelse(indices_default > ncol(X), X[ncol(X)], X[indices_default])
-
-##     theta <- pi/2*Xnew[1]
-##     Lambda <- diag(c(20, 2, 0.5*Xnew[2]+0.5, 0.25*Xnew[3] + 0.25))*scaler
-
-##     U1 <- matrix(c(cos(theta), sin(theta), -sin(theta), cos(theta)), ncol=2)
-##     U2  <- diag(2)
-##     U  <- as.matrix(Matrix::bdiag(U1, U2))
-##     sig_X <- U %*% Lambda  %*% t(U)
-##     as.matrix(sig_X)
-
-## }
-
-
-create_cov_eigen <- function(X, scaler=1) {
-
-    indices_default  <- 1:3
-    Xnew  <- ifelse(indices_default > ncol(X), X[ncol(X)], X[indices_default])
-
-    theta <- pi/2*Xnew[1]
-    Lambda <- diag(c(20, 2, 0.5*Xnew[2]+0.5, 0.25*Xnew[3] + 0.25))*scaler
-
-    U1 <- matrix(c(cos(theta), sin(theta), -sin(theta), cos(theta)), ncol=2)
-    U2  <- diag(2)
-    U  <- as.matrix(Matrix::bdiag(U1, U2))
-    sig_X <- U %*% Lambda  %*% t(U)
-    as.matrix(sig_X)
-
+    sig_X
 }
+
 
 ## Number of features
 p <- 100
@@ -52,6 +31,7 @@ gamma_sd  <- 1
 error_sd  <- 0.5
 
 beta_sd_vec <- 0:10
+
 nreps <- 100
 
 ## Rank of the matrix
@@ -69,14 +49,14 @@ for(rep in 1:nreps) {
         for(beta_sd in beta_sd_vec) {
 
             X <- matrix(runif(n*q, 0, 1), nrow=n, ncol=q)
-            cov_list  <- lapply(1:n, function(i) create_cov_eigen(X[i, , drop=FALSE], scaler=1))
+
+            gammaList <- lapply(1:s, function(i) matrix(rnorm(s*q, 0, sd=gamma_sd), nrow=s, ncol=q))
+            
+            cov_list  <- lapply(1:n, function(i) create_cov_eigen(X[i, , drop=FALSE], gammaList, s, scaler=1) + error_sd^2*diag(s))
             V  <- rustiefel(p, s)
             Vnull  <- rstiefel::NullC(V)
 
             beta_mat <- matrix(runif(q*s, 1, 2), nrow=q)
-
-            count  <- 1
-
             beta <- beta_sd * beta_mat
 
             Z <- sapply(1:n, function(i) {
@@ -123,15 +103,16 @@ for(rep in 1:nreps) {
 
                 YVp <- Ya %*% Vhat_perp
                 sigma2_hat <- sum(YVp^2)/(n*(p-s))
-                
+
+                mean_cov_hat <- apply(cov_psamp, 1:3, mean)
                 steins_loss <- sapply(1:n, function(i) {
-                    a <- t(V) %*% Vhat %*% apply(cov_psamp, 1:3, mean)[i, ,] %*% t(Vhat) %*% V  + sigma2_hat * tcrossprod(t(V) %*% Vhat_perp)
+                    a <- t(V) %*% Vhat %*% mean_cov_hat[i, ,] %*% t(Vhat) %*% V  + sigma2_hat * tcrossprod(t(V) %*% Vhat_perp)
                     b <- cov_list[[i]]
                     steinsLoss(a, solve(b))
                 }) %>% mean
 
                 se_loss <- sapply(1:n, function(i) {
-                    a <- t(V) %*% Vhat %*% apply(cov_psamp, 1:3, mean)[i, ,] %*% t(Vhat) %*% V  + sigma2_hat * tcrossprod(t(V) %*% Vhat_perp)
+                    a <- t(V) %*% Vhat %*% mean_cov_hat[i, ,] %*% t(Vhat) %*% V  + sigma2_hat * tcrossprod(t(V) %*% Vhat_perp)
                     b <- cov_list[[i]]
                     sum((a-b)^2)
                 }) %>% mean
@@ -144,11 +125,13 @@ for(rep in 1:nreps) {
                 squared_error_loss_array[a, q, rep, count] <- se_loss
             }
 
-            count <- count + 1
 
+            print(sprintf("-------------------------------------------------- 1, %i, %i: %f, %f, %f ----------------", rep, beta_sd, subspace_sim_array[1, q, rep, count], steins_loss_array[1, q, rep, count], squared_error_loss_array[1, q, rep, count]))
+            print(sprintf("--------------------------------------------------- 2, %i, %i: %f, %f, %f ----------------", rep, beta_sd, subspace_sim, steins_loss, se_loss))
+            count <- count + 1
         }
 
-        save(subspace_sim_array, steins_loss_array, squared_error_loss_array, file="sim_results2.Rdata")
+        save(subspace_sim_array, steins_loss_array, squared_error_loss_array, file="sim_mean_results.Rdata")
     }
 }
-save(subspace_sim_array, steins_loss_array, squared_error_loss_array, file="sim_results2.Rdata")
+save(subspace_sim_array, steins_loss_array, squared_error_loss_array, file="sim_mean_results.Rdata")
