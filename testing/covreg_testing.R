@@ -18,39 +18,6 @@ create_cov_eigen <- function(X, gammaList, s, scaler=1) {
     sig_X
 }
 
-
-get_mean_cov_hat <- function(fit, inv=FALSE) 
-{
-    A.psamp = fit$A.psamp
-    B.psamp = fit$B2.psamp
-    nsave = dim(A.psamp)[3]
-    p = dim(A.psamp)[1]
-    R = dim(B.psamp)[3]
-    X = unique(fit$matrix.cov)
-    n = dim(X)[1]
-    s.psamp = array(0, dim = c(n, p, p))
-    for (i in 1:n) {
-        for (iter in 1:nsave) {
-            ss = A.psamp[, , iter]
-            for (r in 1:R) {
-                ss = ss + B.psamp[, , r, iter] %*% X[i, ] %*% 
-                  t(X[i, ]) %*% t(B.psamp[, , r, iter])
-            }
-            if(inv)
-                s.psamp[i, , ] = s.psamp[i, , ] + solve(ss)
-            else
-                s.psamp[i, , ] = s.psamp[i, , ] + ss
-        }
-        if(inv)
-            s.psamp[i, , ] <- solve(s.psamp[i, , ]/nsave)
-        else
-            s.psamp[i, , ] <- s.psamp[i, , ]/nsave
-    }
-    s.psamp
-
-}
-
-
 ## Number of features
 p <- 100
 
