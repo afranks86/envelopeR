@@ -334,13 +334,15 @@ covariance_regression_estep <- function(YV, X,  method="covreg",
   SigInvList  <- list(nrow(YV))
   muSigInvList  <- list(nrow(YV))
 
-  if(is.null(fmean))
-    fmean <- as.formula(YV ~ X - 1)
-  if(is.null(fcov))
-    fmean <- as.formula(YV ~ X)
+    if(is.null(fmean))
+        fmean <- as.formula("YV ~ X - 1")
+    if(is.null(fcov))
+        fcov <- as.formula("YV ~ X")
+    fmean <- as.formula(fmean)
+    fcov <- as.formula(fcov)    
 
   if(method == "covreg") {
-    cov_reg_fit  <- covreg::covreg.mcmc(fmean, fcov, R=cov_dim,
+    cov_reg_fit  <- covreg::covreg.mcmc(as.formula(fmean), as.formula(fcov), R=cov_dim,
                                         niter=niter, nthin=nthin, verb=verb)
     nsamples  <- niter/nthin
 
@@ -354,8 +356,14 @@ covariance_regression_estep <- function(YV, X,  method="covreg",
         SigInv  <- solve(cov_psamp[indices[i], , , s])
       })
       SigInvList[[i]]  <- Reduce(`+`, SigInvSamples)/nsamples
+
       muSigInvSamples  <- lapply(1:nsamples, function(s) {
-        t(m_psamp[indices[i], , s]) %*%  SigInvSamples[[s]]
+
+          if(dim(m_psamp)[1] == 1)
+              t(m_psamp[1, , s]) %*%  SigInvSamples[[s]]
+          else
+              t(m_psamp[indices[i], , s]) %*%  SigInvSamples[[s]]
+
       })
 
       muSigInvList[[i]]  <- Reduce(`+`, muSigInvSamples)/nsamples

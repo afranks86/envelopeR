@@ -24,6 +24,37 @@ library(envelopeR)
 ## }
 
 
+get_mean_cov_hat <- function(fit, inv=FALSE) 
+{
+    A.psamp = fit$A.psamp
+    B.psamp = fit$B2.psamp
+    nsave = dim(A.psamp)[3]
+    p = dim(A.psamp)[1]
+    R = dim(B.psamp)[3]
+    X = unique(fit$matrix.cov)
+    n = dim(X)[1]
+    s.psamp = array(0, dim = c(n, p, p))
+    for (i in 1:n) {
+        for (iter in 1:nsave) {
+            ss = A.psamp[, , iter]
+            for (r in 1:R) {
+                ss = ss + B.psamp[, , r, iter] %*% X[i, ] %*% 
+                  t(X[i, ]) %*% t(B.psamp[, , r, iter])
+            }
+            if(inv)
+                s.psamp[i, , ] = s.psamp[i, , ] + solve(ss)
+            else
+                s.psamp[i, , ] = s.psamp[i, , ] + ss
+        }
+        if(inv)
+            s.psamp[i, , ] <- solve(s.psamp[i, , ]/nsave)
+        else
+            s.psamp[i, , ] <- s.psamp[i, , ]/nsave
+    }
+    s.psamp
+
+}
+
 
 ## Number of features
 p <- 25
@@ -34,7 +65,7 @@ n <- 100
 gamma_sd  <- 1
 
 ## error sd
-error_sd  <- 0.5
+error_sd  <- 1
 
 ##beta_sd_vec <- 0:5
 
@@ -63,13 +94,12 @@ create_cov_eigen <- function(X, gammaList, s, scaler=1) {
 subspace_sim_array  <- array(dim=c(length(sfit), nreps,  qmax, length(beta_sd_vec)))
 steins_loss_array  <- array(dim=c(length(sfit), nreps, qmax, length(beta_sd_vec)))
 squared_error_loss_array  <- array(dim=c(length(sfit), nreps, qmax, length(beta_sd_vec)))
+for(q_cur in 1:qmax) {
+    for(rep in 1:nreps) {      
+        beta_count  <- 1
+        for(beta_sd in beta_sd_vec) {
 
-for(rep in 1:nreps) {      
-    beta_count  <- 1
-    for(beta_sd in beta_sd_vec) {
-        for(q_cur in 1:qmax) {
-
-            X <- matrix(runif(n*q_cur, 0, 1), nrow=n, ncol=q_cur)
+            X <- matrix(rnorm(n*q_cur, 0, 1), nrow=n, ncol=q_cur)
 
  
             gammaList <- lapply(1:s, function(i) matrix(rnorm(s*q_cur, 0, sd=gamma_sd), nrow=s, ncol=q_cur))
@@ -78,7 +108,7 @@ for(rep in 1:nreps) {
             V  <- rustiefel(p, s)
             Vnull  <- rstiefel::NullC(V)
 
-            beta_mat <- matrix(runif(q_cur*s, 1, 2), nrow=q_cur)
+            beta_mat <- matrix(rnorm(q_cur*s, 0, 1), nrow=q_cur)
             beta <- beta_sd * beta_mat
 
             Z <- sapply(1:n, function(i) {
@@ -93,17 +123,17 @@ for(rep in 1:nreps) {
 
                 if(s_cur == p) {
 
-                    fit <- covreg.mcmc(Y ~ X, Y ~ X, R=s)
-                    cov_psamp <- cov.psamp(fit)
+                    fit <- covreg.mcmc(Y ~ X - 1, Y ~ X, R=s_cur, verb=FALSE)
 
-
-                    mean_cov_hat <- apply(cov_psamp, 1:3, mean)
+                    mean_cov_hat <- get_mean_cov_hat(fit, inv=TRUE)
+                    
                     steins_loss <- sapply(1:n, function(i) {
                         a <- t(V) %*% mean_cov_hat[i, , ] %*% V
                         b <- cov_list[[i]]
                         steinsLoss(a, solve(b))
                     }) %>% mean
 
+                    mean_cov_hat <- get_mean_cov_hat(fit)
                     se_loss <- sapply(1:n, function(i) {
                         a <- t(V) %*% mean_cov_hat[i, , ] %*% V
                         b <- cov_list[[i]]
@@ -124,22 +154,21 @@ for(rep in 1:nreps) {
                     Vhat <- envfit$V
                     YV <- Y %*% Vhat
                     Vhat_perp <- rstiefel::NullC(Vhat)
-                    fit <- covreg.mcmc(YV ~ X - 1, YV ~ X, R=s)
+                    fit <- covreg.mcmc(YV ~ X - 1, YV ~ X, R=s, verb=FALSE)
 
                     cov_psamp <- cov.psamp(fit)
-
-                    mean_cov_hat <- apply(cov_psamp, 1:3, mean)
 
                     YVp <- Y %*% Vhat_perp
                     sigma2_hat <- sum(YVp^2)/(n*(p-s))
 
-                    mean_cov_hat <- apply(cov_psamp, 1:3, mean)
+                    mean_cov_hat <- get_mean_cov_hat(fit, inv=TRUE)
                     steins_loss <- sapply(1:n, function(i) {
                         a <- t(V) %*% Vhat %*% mean_cov_hat[i, ,] %*% t(Vhat) %*% V  + sigma2_hat * tcrossprod(t(V) %*% Vhat_perp)
                         b <- cov_list[[i]]
                         steinsLoss(a, solve(b))
                     }) %>% mean
 
+                    mean_cov_hat <- get_mean_cov_hat(fit)
                     se_loss <- sapply(1:n, function(i) {
                         a <- t(V) %*% Vhat %*% mean_cov_hat[i, ,] %*% t(Vhat) %*% V  + sigma2_hat * tcrossprod(t(V) %*% Vhat_perp)
                         b <- cov_list[[i]]
@@ -167,28 +196,3 @@ for(rep in 1:nreps) {
     save(subspace_sim_array, steins_loss_array, squared_error_loss_array, file="sim_s_comparison.Rdata")
 }
 
-
-
-get_mean_cov_hat <- function (fit) 
-{
-    A.psamp = fit$A.psamp
-    B.psamp = fit$B2.psamp
-    nsave = dim(A.psamp)[3]
-    p = dim(A.psamp)[1]
-    R = dim(B.psamp)[3]
-    X = unique(fit$matrix.cov)
-    n = dim(X)[1]
-    s.psamp = array(dim = c(n, p, p))
-    for (iter in 1:nsave) {
-        for (i in 1:n) {
-            ss = A.psamp[, , iter]
-            for (r in 1:R) {
-                ss = ss + B.psamp[, , r, iter] %*% X[i, ] %*% 
-                  t(X[i, ]) %*% t(B.psamp[, , r, iter])
-            }
-            s.psamp[i, , , iter] = s.psamp[i, , , iter] + ss
-        }
-        s.psamp[i, , , iter] = s.psamp[i, , , iter]/nsave
-    }
-    s.psamp
-}
