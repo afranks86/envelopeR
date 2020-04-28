@@ -72,7 +72,7 @@ def create_envelope_problem_py(Vinit, n, p, s, r, q, U0, U1, alpha, v0, v1, S, k
     problem = Problem(manifold=manifold, cost=Gx)
     return problem
 
-def optim_envelope_py(Vinit, n, p, s, r, q, U0, U1, alpha, v0, v1, S, k, A, L=0,                  maxtime=1000, maxiters=1000):
+def optim_envelope_py(Vinit, n, p, s, r, q, U0, U1, alpha, v0, v1, S, k, A, L=0, maxtime=1000, maxiters=1000):
 
     problem = create_envelope_problem_py(Vinit, n, p, s, r, q, U0, U1, alpha, v0, v1, S, k, A, L)
     

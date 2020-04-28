@@ -324,7 +324,7 @@ covariance_regression_estep <- function(YV, X,  method="covreg",
                                         fmean = NULL,
                                         fcov = NULL, ...) {
 
-  print("Starting e-step sampling...")
+  print("Starting epe-step sampling...")
   s  <- ncol(YV)
   q  <- ncol(X)
   n  <- nrow(YV)
@@ -359,10 +359,11 @@ covariance_regression_estep <- function(YV, X,  method="covreg",
 
       muSigInvSamples  <- lapply(1:nsamples, function(s) {
 
-          if(dim(m_psamp)[1] == 1)
-              t(m_psamp[1, , s]) %*%  SigInvSamples[[s]]
-          else
-              t(m_psamp[indices[i], , s]) %*%  SigInvSamples[[s]]
+
+        if(dim(m_psamp)[1] == 1)
+          t(m_psamp[1, , s]) %*%  SigInvSamples[[s]]
+        else
+          t(m_psamp[indices[i], , s]) %*%  SigInvSamples[[s]]
 
       })
 

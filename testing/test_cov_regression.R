@@ -6,16 +6,17 @@ library(rstiefel)
 library(glmnet)
 library(mvtnorm)
 
-s <- 10
+s <- 50
 q <- 2
 n <- 200
 
+beta_sd  <- 2
+gamma_sd  <- 2
+error_sd  <- 2
+
 X <- matrix(rnorm(n*q), nrow=n, ncol=q)
-    
-beta <- matrix(rnorm(q*s, sd=2), nrow=q)
-
-gamma <- matrix(rnorm(q*s, sd=5), nrow=q)
-
+beta <- matrix(rnorm(q*s, sd=beta_sd), nrow=q)
+gamma <- matrix(rnorm(q*s, sd=gamma_sd), nrow=q)
 
 ## Covariance: Sigma = gamma %*% XX^T %*%  gamma^T + diag
 ## Mean = X %*% beta
@@ -37,22 +38,49 @@ cov_dat <- list(X = X,
 m1 <- stan_model(file = '../src/stan_files/cov_regression.stan')
 m2 <- stan_model(file = '../src/stan_files/cov_regression_aug.stan')
 
-
-
-
 ## Fit 1 
 nchains <- 4
 fit <- stan(file = '../src/stan_files/cov_regression.stan',
             data = cov_dat, chains=nchains,
-            init=rep(list(list(L_Omega=diag(s))), nchains),
-            iter = 100, warmup = 50)
+            init=lapply(1:nchains, function(l)
+                list(L_Omega=diag(s),
+                     alpha=t(beta),
+                     gamma=t(gamma))))
+
+fit <- rstan::vb(m1, data = cov_dat,
+                 init=list(L_Omega=diag(s)))
+
+## Bxx^B
+
+colnames(Y)  <- paste0("Y", 1:ncol(Y))
+colnames(X)  <- paste0("X", 1:ncol(X))
+
+res  <- covreg::covreg.mcmc(Y ~ X, Y ~ X)
+
+dim(res$B2.psamp)
+gsamps  <- res$B2.psamp[, 2:3, 1, ]
+plot(t(apply(gsamps, c(1,2), mean)), gamma)
+
+bsamps  <- res$B1.psamp[, 2:3, ]
+plot(t(apply(bsamps, c(1,2), mean)), beta)
+
+traceplot(fit, "gamma")
+
+summary(summary(fit)$summary[, "n_eff"])
 
 rstan::get_elapsed_time(fit)
 
 samples <- rstan::extract(fit)
 
-plot(t(apply(samples$gamma, c(2,3), mean)), beta)
-cor.test(t(apply(samples$gamma, c(2,3), mean)), beta)
+mean((samples$gamma)[, 6, 2])
+gamma[2, 6]
+
+apply(samples$gamma, c(2,3), mean)
+gamma[1, 1]
+
+plot(t(apply(samples$gamma[1:1000, ,], c(2,3), mean)), gamma)
+abline(a=0, b=1)
+cor.test(t(apply(samples$gamma, c(2,3), mean)), gamma)
 
 
 
@@ -70,7 +98,7 @@ samples <- rstan::extract(fit_aug)
 
 plot(t(apply(samples$gamma, c(2,3), mean)), gamma)
 
-plot(t(apply(samples$alpha, c(2,3), mean)), beta)
+plot(t(apply(samples$beta, c(2,3), mean)), beta)
 
 
 library(tidyverse)

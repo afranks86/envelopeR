@@ -1,9 +1,27 @@
 Package: envelopeR
-Version: 0.1
-Imports:
-    rstiefel,
-    reticulate,
-    Matrix
+Type: Package
+Title: Large-scale Envelope Estimation in the Spiked Model
+Version: 0.1.0
+Depends:
+  R (>= 3.5),
+  rstiefel,
+  tidyverse,
+  reticulate,
+  Matrix,
+  ggrepel,
+  ggforce,
+  patchwork
+Author: Alexander Franks
+Maintainer: The package maintainer <afranks@pstat.ucsb.edu>
+Description: More about what it does (maybe more than one line)
+    Use four spaces when indenting paragraphs within the Description.
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 7.0.2
 Suggests:
-    tidyverse,
-    magrittr
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+URL: https://github.com/afranks86/envelopeR
+BugReports: https://github.com/afranks86/envelopeR/issues
