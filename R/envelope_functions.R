@@ -324,7 +324,7 @@ covariance_regression_estep <- function(YV, X,  method="covreg",
                                         fmean = NULL,
                                         fcov = NULL, ...) {
 
-  print("Starting epe-step sampling...")
+  print("Starting e-step sampling...")
   s  <- ncol(YV)
   q  <- ncol(X)
   n  <- nrow(YV)
@@ -340,6 +340,121 @@ covariance_regression_estep <- function(YV, X,  method="covreg",
         fcov <- as.formula("YV ~ X")
     fmean <- as.formula(fmean)
     fcov <- as.formula(fcov)    
+
+  if(method == "covreg") {
+    cov_reg_fit  <- covreg::covreg.mcmc(as.formula(fmean), as.formula(fcov), R=cov_dim,
+                                        niter=niter, nthin=nthin, verb=verb)
+    nsamples  <- niter/nthin
+
+    cov_psamp  <- covreg::cov.psamp(cov_reg_fit)
+    m_psamp  <- covreg::m.psamp(cov_reg_fit)
+
+    indices  <- sapply(1:nrow(X), function(i) which(apply(unique(X), 1, function(x) all.equal(x, X[i, ]) == "TRUE")))
+
+    for(i in 1:nrow(X)) {
+      SigInvSamples  <- lapply(1:nsamples, function(s) {
+        SigInv  <- solve(cov_psamp[indices[i], , , s])
+      })
+      SigInvList[[i]]  <- Reduce(`+`, SigInvSamples)/nsamples
+
+      muSigInvSamples  <- lapply(1:nsamples, function(s) {
+
+
+        if(dim(m_psamp)[1] == 1)
+          t(m_psamp[1, , s]) %*%  SigInvSamples[[s]]
+        else
+          t(m_psamp[indices[i], , s]) %*%  SigInvSamples[[s]]
+
+      })
+
+      muSigInvList[[i]]  <- Reduce(`+`, muSigInvSamples)/nsamples
+    }
+
+  } else if(method == "vb") {
+
+    if(is.null(sm))
+      stop("Must specify Stan model")
+
+    stan_fit <- rstan::vb(sm, data=data_list)
+    samples <- rstan::extract(stan_fit)
+    for(i in 1:nrow(X)) {
+      SigInvSamples  <- lapply(1:nsamples, function(s) {
+        A  <- samples$A[s, ,]
+        L  <- samples$gamma[s, ,] %*%  X[i, ]
+        SigInv  <- solve(tcrossprod(L) + A)
+      })
+      SigInvList[[i]]  <- Reduce(`+`, SigInvSamples)/nsamples
+      eta  <- samples$beta
+      muSigInvSamples  <- lapply(1:nsamples, function(s) {
+        t(eta[s, , ]) %*%  SigInvSamples[[s]]
+      })
+
+      muSigInvList[[i]]  <- Reduce(`+`, muSigInvSamples)/nsamples
+    }
+
+  } else {
+    if(is.null(sm))
+      stop("Must specify Stan model")
+
+    stan_fit  <- rstan::sampling(sm, data=data_list)
+    samples <- rstan::extract(stan_fit)
+    for(i in 1:nrow(X)) {
+      SigInvSamples  <- lapply(1:nsamples, function(s) {
+        A  <- samples$A[s, ,]
+        L  <- samples$gamma[s, ,] %*%  X[i, ]
+        SigInv  <- solve(tcrossprod(L) + A)
+      })
+      SigInvList[[i]]  <- Reduce(`+`, SigInvSamples)/nsamples
+      eta  <- samples$beta
+      muSigInvSamples  <- lapply(1:nsamples, function(s) {
+        t(eta[s, , ]) %*%  SigInvSamples[[s]]
+      })
+
+      muSigInvList[[i]]  <- Reduce(`+`, muSigInvSamples)/nsamples
+    }
+  }
+  print("Finished e-step sampling...")
+
+  list(SigInvList = SigInvList, muSigInvList = muSigInvList,
+       covreg_res=cov_reg_fit)
+}
+
+
+
+#' Covariance Regression Estep
+#'
+#' @param YV
+#' @param X
+#' @param method
+#' @param niter
+#' @param nthin
+#'
+#' @return
+#' @export covariance_regression_estep
+#'
+#' @examples
+custom_estep <- function(YV, X,  method="covreg",
+                                        cov_dim=ncol(YV), niter=1000, nthin=10,
+                                        sm=NULL, verb=FALSE,
+                                        fmean = NULL,
+                                        fcov = NULL, ...) {
+
+  print("Starting e-step sampling...")
+  s  <- ncol(YV)
+  q  <- ncol(X)
+  n  <- nrow(YV)
+
+  data_list <- list(s=s, q=q, n=n, X=X, Y=YV)
+
+  SigInvList  <- list(nrow(YV))
+  muSigInvList  <- list(nrow(YV))
+
+    if(is.null(fmean))
+        fmean <- as.formula("YV ~ X - 1")
+    if(is.null(fcov))
+        fcov <- as.formula("YV ~ X")
+    fmean <- as.formula(fmean)
+    fcov <- as.formula(fcov)
 
   if(method == "covreg") {
     cov_reg_fit  <- covreg::covreg.mcmc(as.formula(fmean), as.formula(fcov), R=cov_dim,

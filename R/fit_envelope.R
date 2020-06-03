@@ -344,8 +344,8 @@ optimize_envelope_covreg <- function(Y, X,
                                      Beta0 = matrix(0, nrow=ncol(X), ncol=ncol(Y)),
                                      v1=0, v0 = 0,
                                      cov_dim = s,
-                                     U1=matrix(0, nrow=s, ncol=s),
-                                     U0=matrix(0, nrow=r, ncol=r),
+                                     U1=NULL,
+                                     U0=NULL,
                                      alpha=0, nu=0, nchunks = 1, L=0,
                                      center=TRUE, maxIters=1000, use_py=FALSE,
                                      searchParams=NULL,
@@ -354,11 +354,16 @@ optimize_envelope_covreg <- function(Y, X,
                                      fcov = NULL, ...) {
 
 
-    Y <- Y %*% D
-    n <- nrow(Y)
-    p <- ncol(Y)
-    q <- ncol(X)
-    
+  Y <- Y %*% D
+  n <- nrow(Y)
+  p <- ncol(Y)
+  q <- ncol(X)
+
+  if(is.null(U0))
+    U1  <- matrix(0, nrow=s, ncol=s)
+  if(is.null(U1))
+    U0  <- matrix(0, nrow=r, ncol=r)
+
     intercept <- rep(0, ncol(Y))
     if(center) {
       intercept <- colMeans(Y)
