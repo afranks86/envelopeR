@@ -44,7 +44,7 @@ getRank <- function(Y) {
 #' @examples
 create_plots <- function(V, samples, n1, n2=NULL, view=c(1,2), nlabeled=20,
                          to_plot=NULL, obs_names=NULL, R=ncol(V),
-                         labels=rownames(V),
+                         labels=rownames(V), legend.title="",
                          label_size=2, plot_type="both", col_values=NULL, ...) {
 
   rownames(V)  <- labels
@@ -92,8 +92,8 @@ create_plots <- function(V, samples, n1, n2=NULL, view=c(1,2), nlabeled=20,
 
 
   biplot <- covarianceBiplot(Vstar, cov_proj, obs_to_plot=obs_to_plot,
-                             nlabeled=40, label_size=label_size,
-                             col_values=col_values)
+                             nlabeled=nlabeled, label_size=label_size, legend.title=legend.title,
+                             col_values=col_values, ...)
 
 
   if(plot_type == "both") {
@@ -110,6 +110,17 @@ create_plots <- function(V, samples, n1, n2=NULL, view=c(1,2), nlabeled=20,
     if(is.null(dev.list()))
       dev.new()
     biplot
+  } else if(plot_type == "line" ) {
+    if(is.null(dev.list()))
+      dev.new()
+
+    posterior_plot <- posteriorLinePlot(cov_proj,
+                                  Osamps_proj, omegaSamps_proj,
+                                  nsamps=nsamps,
+                                  obs_to_plot=obs_to_plot,
+                                  col_values=col_values,
+                                  probRegion=0.95, legend=posterior_legend, ...)
+
   } else {
     stop("Invalid plot_type")
   }
@@ -174,8 +185,9 @@ rotate_basis <- function(V, samples, n1=1, n2=NULL) {
 posteriorPlot <- function(covSamps, Osamps, OmegaSamps, nsamps, obs_to_plot,
                           probRegion=0.95, hline=NULL,  ymax=NULL, type = "mag",
                           plotPoints=TRUE, polar=FALSE, legend=TRUE,
+                          main = NULL,
                           legend.title = NULL,
-                          col_values=NULL, alpha=1) {
+                          col_values=NULL, alpha=1, ...) {
 
   ngroups <- length(obs_to_plot)
 
@@ -235,7 +247,7 @@ posteriorPlot <- function(covSamps, Osamps, OmegaSamps, nsamps, obs_to_plot,
                        breaks=c(-pi/2, -pi/4, 0, pi/4, pi/2),
                        labels=c(expression(-pi/2), expression(-pi/4), 0,
                                 expression(pi/4), expression(pi/2)))
-  
+
   if(!is.null(hline))
     p <- p + geom_hline(yintercept=hline, lty=2)
   if(!legend) {
@@ -252,11 +264,10 @@ posteriorPlot <- function(covSamps, Osamps, OmegaSamps, nsamps, obs_to_plot,
   else
       p  <- p + scale_colour_discrete(name=legend.title)
 
-  p + ylab(ylab) + xlab(expression("angle, acos("~U[1]^T*V[1]~")")) +
-    theme(legend.title=element_blank())
+  p  <- p + ylab(ylab) + xlab(expression("angle, acos("~U[1]^T*V[1]~")")) +
+    theme(legend.title=element_blank()) + ggtitle(main)
 
-
-
+  p
 
 }
 
@@ -276,7 +287,8 @@ posteriorPlot <- function(covSamps, Osamps, OmegaSamps, nsamps, obs_to_plot,
 #'
 #' @examples
 covarianceBiplot <- function(Vsub, projected_samples, obs_to_plot=1:dim(projected_samples)[1],
-                             nlabeled=20, legend=TRUE, legend.pos="right", legend.name="", label_size=2, col_values=NULL) {
+                             nlabeled=20, legend=TRUE, legend.pos="right", legend.title="", label_size=2,
+                             col_values=NULL, custom_label_data=NULL, alpha=1, ...) {
 
   if(ncol(Vsub) != 2) {
     stop("Please provide 2-dimensional subspace")
@@ -361,52 +373,80 @@ covarianceBiplot <- function(Vsub, projected_samples, obs_to_plot=1:dim(projecte
 
   p <- p + geom_point(data=label_data, aes(x=x, y=y), col="red", size=1.5)
 
-  p <- p + geom_label_repel(
-    data  = subset(label_data, type=="pos_x"),
-    aes(x=x, y=y, label=label),
-    nudge_x = 0.5,
-    force=1,
-    segment.size  = 0.5,
-    segment.color = "grey50",
-    direction     = "y",
-    hjust         = 0,
-    size = label_size
-  ) +
-    geom_label_repel(
-      data = subset(label_data, type=="neg_x"),
-      aes(x=x, y=y, label=label),
-      force=1,
-      nudge_x = -0.5,
-      segment.size  = 0.5,
-      segment.color = "grey50",
-      direction     = "y",
-      hjust         = 1,
-      size= label_size
-    ) +
-    geom_label_repel(
-      data = subset(label_data, type=="pos_y"),
-      aes(x=x, y=y, label=label),
-      force=1,
-      nudge_y = 0.05,
-      segment.size  = 0.5,
-      segment.color = "grey50",
-      direction = "both",
-      size = label_size
-    ) +
-    geom_label_repel(
-      data = subset(label_data, type=="neg_y"),
-      aes(x=x, y=y, label=label),
-      force=1,
-      nudge_y = -0.05,
-      segment.size  = 0.5,
-      segment.color = "grey50",
-      direction     = "both",
-      size=label_size
-    )
+  if(is.null(custom_label_data)) {
+    p <- p + geom_label_repel(
+               data  = subset(label_data, type=="pos_x"),
+               aes(x=x, y=y, label=label),
+               nudge_x = 0.5,
+               force=1,
+               segment.size  = 0.5,
+               segment.color = "grey50",
+               direction     = "y",
+               xlim=c(0.9*max(xlimits), max(xlimits)),
+               hjust         = 0,
+               size = label_size
+             ) +
+      geom_label_repel(
+        data = subset(label_data, type=="neg_x"),
+        aes(x=x, y=y, label=label),
+        force=1,
+        nudge_x = -0.5,
+        segment.size  = 0.5,
+        segment.color = "grey50",
+        direction     = "y",
+        hjust         = 1,
+        xlim=c(min(xlimits), 0.9*min(xlimits)),
+        size= label_size
+      ) +
+      geom_label_repel(
+        data = subset(label_data, type=="pos_y"),
+        aes(x=x, y=y, label=label),
+        force=1,
+        nudge_y = 0.05,
+        segment.size  = 0.5,
+        segment.color = "grey50",
+        direction = "both",
+        size = label_size
+      ) +
+      geom_label_repel(
+        data = subset(label_data, type=="neg_y"),
+        aes(x=x, y=y, label=label),
+        force=1,
+        nudge_y = -0.05,
+        segment.size  = 0.5,
+        segment.color = "grey50",
+        direction     = "both",
+        size=label_size
+      )
+  } else {
+    custom_label_x  <- custom_label_data %>% filter(y==0)
+    custom_label_y  <- custom_label_data %>% filter(x==0)
+    
+    p  <- p + geom_label_repel(
+                data  = custom_label_x,
+                aes(x=x, y=y, label=labels),
+                nudge_x = 0.05,
+                force=1,
+                segment.size  = 0,
+                segment.color = "grey50",
+                segment.alpha = 0,
+                direction     = "y",
+                hjust         = 0,
+                size = label_size
+              ) +
+      geom_label_repel(
+        data = custom_label_y, 
+        aes(x=x, y=y, label=labels),
+        force=2,
+        segment.size  = 0,
+        segment.color = "grey50",
+        segment.alpha = 0,
+        direction = "both",
+        size = label_size
+      )
+  }
 
-
-
-  p + theme(legend.position = legend.pos, legend.title=element_blank())
+  p + theme(legend.position = legend.pos) +  guides(color=guide_legend(title=legend.title))
 
 }
 
@@ -464,8 +504,136 @@ getHullPoints <- function(nsamps, pmPsi, OmegaSamps, Osamps, type="mag",
 
 }
 
-steinsLoss <- function(C1, C2inv) {
 
-    sum(diag(C1 %*% C2inv)) - log(det(C1 %*% C2inv)) - nrow(C1)
+get_pm_psi  <- function(Vsub, projected_samples, obs_to_plot=1:dim(projected_samples)[1]) {
 
+
+  if(ncol(Vsub) != 2) {
+    stop("Please provide 2-dimensional subspace")
+  }
+
+  if(is.null(rownames(Vsub)))
+    rownames(Vsub) <- 1:nrow(Vsub)
+
+  lambda_max <- lambda_min <- angle <- c()
+
+  nobs <- length(obs_to_plot)
+  for(k in obs_to_plot) {
+
+    pmPsi <- apply(projected_samples[k, , , ], 1:2, mean)
+
+    eigK <- eigen(pmPsi)
+    lambda <- eigK$values
+    evecs <- eigK$vectors
+
+    maxIndex <- which.max(lambda)
+    lamRatio <- lambda[maxIndex]/lambda[-maxIndex]
+
+    lambda_max <- c(lambda_max, lambda[maxIndex])
+    lambda_min <- c(lambda_min, lambda[-maxIndex])
+    angle = c(angle, atan(evecs[2, maxIndex]/evecs[1, maxIndex]))
+
+  }
+
+  
+}
+
+
+
+posteriorLinePlot <- function(covSamps, Osamps, OmegaSamps, nsamps, obs_to_plot,
+                              probRegion=0.95, hline=NULL,  ymax=NULL, type = "mag",
+                              plotPoints=TRUE, polar=FALSE, legend=TRUE,
+                              legend.title = NULL,
+                              col_values=NULL, alpha=1, ...) {
+
+  ngroups <- length(obs_to_plot)
+
+  group_names <- names(obs_to_plot)
+  if(is.null(group_names))
+    group_names = factor(1:ngroups)
+
+  if(type=="mag") {
+    ylab <- expression(lambda[1])
+  }
+  else if(type=="logmag") {
+    ylab <- expression("log"[2]~"(" ~ lambda[1] ~ ")")
+  } else if (type =="logratio") {
+    ylab <- expression("log"[2]~"(" ~ lambda[1]/lambda[2] ~ ")")
+  } else {
+    ylab <- expression("(" ~ lambda[1]/lambda[2] ~ ")")
+  }
+
+
+  ##plot(0, 0, xlim=c(-pi/2, pi/2),
+  ##     ylim=c(0, ymax), cex=0, xlab=, ylab=ylab, xaxt="n", cex.axis=cex.axis, cex.lab=1.5)
+  ## axis(1, at=seq(-pi/2, pi/2, by=pi/4), labels=expression(-pi/2, -pi/4, 0, pi/4, pi/2), cex.axis=cex.axis, cex.lab=1.5)
+
+  group_pts_angle <- group_pts_eval <- group_type <- sample_id  <- c()
+  count <- 1
+  for(g in obs_to_plot) {
+
+    pmPsi <- apply(covSamps[g, , , ], 1:2, mean)
+
+    eigPsi <- eigen(pmPsi)
+    pmValues <- eigPsi$values
+    pmVectors <- eigPsi$vectors
+    maxIndex <- which.max(pmValues)
+
+    hp <- getHullPoints(nsamps, pmPsi, OmegaSamps[, g, ], Osamps[, , g, ],
+                        type=type, probRegion=probRegion)
+    pts <- hp$allPts
+
+    group_pts_angle <- c(group_pts_angle, pts[1, ])
+    group_pts_eval <- c(group_pts_eval, pts[2, ])
+    group_type <- c(group_type, rep(group_names[count], length(pts[2, ])))
+    sample_id  <- c(sample_id, 1:nsamps)
+    count <- count + 1
+
+  }
+
+
+  posterior_summaries <- tibble(angle = group_pts_angle, eval = group_pts_eval, id = as.numeric(group_type), samp = sample_id)
+  posterior_summaries  <- posterior_summaries %>% filter(angle < -pi/4)
+
+  if(is.null(ymax))
+    ymax <- 1.1*max(group_pts_eval)
+
+  p <- ggplot(posterior_summaries) +
+    geom_path(aes(x=angle, y=eval, col=id, group=sample_id), alpha=alpha) +
+    theme_bw(base_size=20) + ylim(c(0, ymax)) +
+    scale_x_continuous(limits=c(-pi/2, pi/2),
+                       breaks=c(-pi/2, -pi/4, 0, pi/4, pi/2),
+                       labels=c(expression(-pi/2), expression(-pi/4), 0,
+                                expression(pi/4), expression(pi/2)))
+
+  if(!is.null(hline))
+    p <- p + geom_hline(yintercept=hline, lty=2)
+  if(!legend) {
+    p <- p + theme(legend.position = "none")
+
+  } else{
+    if(is.null(legend.title))
+      p <- p + theme(legend.position = "top", legend.title=element_blank())
+    else
+      p <- p + theme(legend.position = "top")
+  }
+  ## if(!is.null(col_values))
+    # p <- p + scale_color_manual(values=col_values)
+  ## else
+    #  p  <- p + scale_colour_gradient(name=legend.title)
+
+  p + ylab(ylab) + xlab(expression("angle, acos("~U[1]^T*V[1]~")")) +
+    theme(legend.title=element_blank())
+
+  p + colorspace::scale_color_continuous_sequential(palette = "Viridis", name=legend.title)
+
+
+}
+
+
+compute_log_likelihood  <- function(Y, index_map, mu_array, sigma_array) {
+  sum(sapply(1:nrow(Y), function(i) dmvnorm(Y[i, ],
+                                        mean = mu_array[index_map[i], ], sigma=sigma_array[index_map[i], , ],
+                                        log=TRUE))
+      )
 }
