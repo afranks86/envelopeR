@@ -527,6 +527,162 @@ optimize_envelope_covreg <- function(Y, X,
 }
 
 
+optimize_envelope_custom <- function(Y, X,
+                                     D = diag(ncol(Y)),
+                                     s=2, r=0,
+                                     Vinit = "OLS",
+                                     posterior_means_function=NULL,
+                                     center=TRUE, maxIters=1000, use_py=FALSE,
+                                     searchParams=NULL,
+                                     verbose_covreg = FALSE,
+                                     fmean = NULL,
+                                     fcov = NULL, ...) {
+
+
+  Y <- Y %*% D
+  n <- nrow(Y)
+  p <- ncol(Y)
+  q <- ncol(X)
+  
+  if(is.null(posterior_mean_function)) {
+    stop("Must specify posterior_mean_function")
+  }
+
+  if(is.character(Vinit)) {
+    if(Vinit == "OLS") {
+
+      Ginit <- svd(beta_hat)$v[, 1:min(s, q), drop=FALSE]
+      ## if(s > q) {
+      ##     Ginit <- cbind(Ginit, NullC(Ginit)[, 1:(s-q), drop=FALSE])
+      ## }
+
+      if(s + r - q > 0) {
+        res_proj <- (diag(p) - Ginit %*% t(Ginit)) %*% t(resid)
+        Uinit <- svd(res_proj)$u[, 1:(s + r - q), drop=FALSE] %*%
+                             rustiefel(s+r-q, s+r-q)
+      } else {
+        Uinit  <- matrix(0, nrow=p, ncol=0)
+      }
+
+      Vinit <- cbind(Ginit, Uinit)
+
+    } else if(Vinit == "COV") {
+      Vinit <- svd(Y)$v[, 1:(s+r), drop=FALSE]
+
+    } else {
+      warn("Randomly initializing")
+      Vinit <- rustiefel(ncol(Y), s+r)
+    }
+  } else if(is.null(Vinit)) {
+    Vinit <- rustiefel(ncol(Y), s+r)
+  } else if( !is.matrix(Vinit) ) {
+    stop("Vinit must be a semi-orthogonal matrix or string")
+  }
+
+  if (s <= 0){
+    stop("Require s > 0")
+  }
+  if (r < 0){
+    stop("Require r >= 0")
+  }
+  if(s + r > p) {
+    stop("Require s + r <= p")
+  }
+
+  if(norm(t(Vinit) %*% Vinit - diag(s+r)) > 1e-6) {
+    stop("Vinit not semi-orthogonal")
+  }
+
+  evals <- eigen(t(X) %*% X)$values
+  if (evals[length(evals)] < 1e-6) {
+    warning("Perfect Colinearity in X")
+  }
+
+  ## chunks can only be as large as s+r
+  if(nchunks > s + r)
+    nchunks <- s + r
+
+  ## Need to initialize these
+  eta  <- beta_hat %*% Vinit
+  z <- (Y - X %*% beta_hat) %*% Vinit
+  sig_inv  <- solve(t(z) %*% z)
+
+  SigInvXList  <-  lapply(1:n, function(i) sig_inv)
+  muSigXList  <-  lapply(1:n, function(i) X[i, ]  %*% eta %*% sig_inv)
+
+  pars <- list(Y=Y, resid=resid, X=X, n=n, p=p, s=s, r=r,
+               SigInvXList=SigInvXList, muSigXList = muSigXList,
+               U1=U1, U0=U0, v1=v1, v0=v0, q=q,
+               prior_diff=prior_diff,
+               Lambda0=Lambda0, L=L, alpha=alpha, nu=nu)
+
+
+  F <- function(Vcur) do.call(F_cov_reg, c(list(V=Vcur), pars))
+  dF <- function(Vcur) do.call(dF_cov_reg, c(list(V=Vcur), pars))
+
+  V  <- Vinit
+  max_count <- Inf
+  count <- 1
+
+  Vprev <- matrix(Inf, nrow=nrow(V), ncol=ncol(V))
+  Fcur <- F(V)
+  Fprev <- Fcur + abs(Fcur)
+  Finit <- Fprev
+  tol_f <- 1e-8
+  tol_v <- 1e-8
+
+  ## (Fprev-Fcur) / (abs(Finit - Fcur) + 1) > tol_f &
+  while(sqrt(sum((Vprev - V)^2)/n) > tol_v & count < max_count) {
+
+    start  <- Sys.time()
+
+    Fprev <- F(V)
+    Vprev <- V
+
+    ## E - Step
+    YV  <- Y %*% V
+    estep  <- posterior_means_function(YV=YV, X=X)
+
+    SigInvXList  <-  estep$SigInvList
+    muSigXList  <-  estep$muSigInvList
+
+    pars <- list(Y=Y, resid=resid, X=X, n=n, p=p, s=s, r=r, q=q,
+                 SigInvXList=SigInvXList, muSigXList = muSigXList,
+                 U1=U1, U0=U0, v1=v1, v0=v0,
+                 prior_diff=prior_diff,
+                 Lambda0=Lambda0, alpha=alpha, nu=nu, L=L)
+
+    ## M - Step
+
+    mstep  <- covariance_regression_mstep(V,
+                                          searchParams=searchParams,
+                                          maxIters=maxIters,
+                                          pars)
+
+    V  <- mstep$V
+    Fcur  <- mstep$Fcur
+    print(sprintf("F(V) = %f, time = %s", Fcur, Sys.time() - start))
+    count <- count + 1
+
+  }
+
+  Yproj <- Y %*% V[, 1:s]
+
+  estep  <- posterior_means_function(YV=Yproj, X=X)
+
+  eta_hat_env <- solve(t(X) %*% X + Lambda0) %*% t(X) %*% Yproj
+  beta_env <- eta_hat_env %*% t(V[, 1:s])
+  rownames(V)  <- colnames(Y)
+
+  list(V=V, intercept=intercept, beta_ols=beta_hat,
+       beta_env=beta_env, eta_hat=eta_hat_env, F=F, dF=dF,
+       covariance_list = estep)
+
+}
+
+
+
+
 optimize_envelope_cook <- function(Y, X, D = diag(ncol(Y)),
                                    s=2, r=0,
                                    Vinit = "OLS",

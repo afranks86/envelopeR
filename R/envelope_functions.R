@@ -433,11 +433,9 @@ covariance_regression_estep <- function(YV, X,  method="covreg",
 #' @export covariance_regression_estep
 #'
 #' @examples
-custom_estep <- function(YV, X,  method="covreg",
-                                        cov_dim=ncol(YV), niter=1000, nthin=10,
-                                        sm=NULL, verb=FALSE,
-                                        fmean = NULL,
-                                        fcov = NULL, ...) {
+custom_estep <- function(YV, X,  cov_dim=ncol(YV),
+                        bayes_mc_function,
+                        sm=NULL, verb=FALSE, ...) {
 
   print("Starting e-step sampling...")
   s  <- ncol(YV)
@@ -487,48 +485,7 @@ custom_estep <- function(YV, X,  method="covreg",
 
   } else if(method == "vb") {
 
-    if(is.null(sm))
-      stop("Must specify Stan model")
 
-    stan_fit <- rstan::vb(sm, data=data_list)
-    samples <- rstan::extract(stan_fit)
-    for(i in 1:nrow(X)) {
-      SigInvSamples  <- lapply(1:nsamples, function(s) {
-        A  <- samples$A[s, ,]
-        L  <- samples$gamma[s, ,] %*%  X[i, ]
-        SigInv  <- solve(tcrossprod(L) + A)
-      })
-      SigInvList[[i]]  <- Reduce(`+`, SigInvSamples)/nsamples
-      eta  <- samples$beta
-      muSigInvSamples  <- lapply(1:nsamples, function(s) {
-        t(eta[s, , ]) %*%  SigInvSamples[[s]]
-      })
-
-      muSigInvList[[i]]  <- Reduce(`+`, muSigInvSamples)/nsamples
-    }
-
-  } else {
-    if(is.null(sm))
-      stop("Must specify Stan model")
-
-    stan_fit  <- rstan::sampling(sm, data=data_list)
-    samples <- rstan::extract(stan_fit)
-    for(i in 1:nrow(X)) {
-      SigInvSamples  <- lapply(1:nsamples, function(s) {
-        A  <- samples$A[s, ,]
-        L  <- samples$gamma[s, ,] %*%  X[i, ]
-        SigInv  <- solve(tcrossprod(L) + A)
-      })
-      SigInvList[[i]]  <- Reduce(`+`, SigInvSamples)/nsamples
-      eta  <- samples$beta
-      muSigInvSamples  <- lapply(1:nsamples, function(s) {
-        t(eta[s, , ]) %*%  SigInvSamples[[s]]
-      })
-
-      muSigInvList[[i]]  <- Reduce(`+`, muSigInvSamples)/nsamples
-    }
-  }
-  print("Finished e-step sampling...")
 
   list(SigInvList = SigInvList, muSigInvList = muSigInvList,
        covreg_res=cov_reg_fit)

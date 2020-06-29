@@ -312,7 +312,7 @@ covarianceBiplot <- function(Vsub, projected_samples, obs_to_plot=1:dim(projecte
   pos_x_indices <- order(Vsub[, 1], decreasing=TRUE)[1:npos]
   neg_x_indices <- order(Vsub[, 1], decreasing=FALSE)[1:nneg]
   pos_y_indices <- setdiff(order(Vsub[, 2], decreasing=TRUE), c(pos_x_indices, neg_x_indices))[1:npos]
-  neg_y_indices <- setdiff(order(Vsub[, 2], decreasing=FALSE), c(pos_x_indices, pos_y_indices))[1:nneg]
+  neg_y_indices <- setdiff(order(Vsub[, 2], decreasing=FALSE), c(pos_x_indices, neg_x_indices))[1:nneg]
 
   lambda_max <- lambda_min <- angle <- c()
 
@@ -382,7 +382,7 @@ covarianceBiplot <- function(Vsub, projected_samples, obs_to_plot=1:dim(projecte
                segment.size  = 0.5,
                segment.color = "grey50",
                direction     = "y",
-               xlim=c(0.9*max(xlimits), max(xlimits)),
+               xlim=c(0.7*median(Vsub[pos_x_indices, 1]), Inf),
                hjust         = 0,
                size = label_size
              ) +
@@ -395,7 +395,7 @@ covarianceBiplot <- function(Vsub, projected_samples, obs_to_plot=1:dim(projecte
         segment.color = "grey50",
         direction     = "y",
         hjust         = 1,
-        xlim=c(min(xlimits), 0.9*min(xlimits)),
+        xlim=c(-Inf, 0.7*median(Vsub[neg_x_indices, 2])),
         size= label_size
       ) +
       geom_label_repel(
@@ -406,6 +406,7 @@ covarianceBiplot <- function(Vsub, projected_samples, obs_to_plot=1:dim(projecte
         segment.size  = 0.5,
         segment.color = "grey50",
         direction = "both",
+        ylim=c(0.7*median(Vsub[pos_y_indices, 2]), Inf),
         size = label_size
       ) +
       geom_label_repel(
@@ -416,6 +417,7 @@ covarianceBiplot <- function(Vsub, projected_samples, obs_to_plot=1:dim(projecte
         segment.size  = 0.5,
         segment.color = "grey50",
         direction     = "both",
+        ylim=c(-Inf, 0.7*median(Vsub[neg_y_indices, 2])),
         size=label_size
       )
   } else {
