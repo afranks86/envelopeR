@@ -8,7 +8,7 @@ library(mvtnorm)
 
 s <- 3
 q <- 2
-n <- 200
+n <- 100
 
 X <- matrix(rnorm(n*q), nrow=n, ncol=q)
     
