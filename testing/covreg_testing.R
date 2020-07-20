@@ -67,18 +67,18 @@ beta_sd_vec <- seq(2, 10, by=2)
 nreps <- 100
 
 ## Rank of the matrix
-qmax <- 1
+qmax <- 4
 
 ## dimension of v
 s <- 4
 
-subspace_sim_array  <- array(dim=c(2, s, nreps, length(beta_sd_vec)))
-steins_loss_array  <- array(dim=c(2, s, nreps, length(beta_sd_vec)))
-squared_error_loss_array  <- array(dim=c(2, s, nreps, length(beta_sd_vec)))
-for(rep in 1:nreps) {      
-    for(q in 1:qmax) {
-        count  <- 1
-        for(beta_sd in beta_sd_vec) {
+subspace_sim_array  <- array(dim=c(2, qmax, nreps, length(beta_sd_vec)))
+steins_loss_array  <- array(dim=c(2, qmax, nreps, length(beta_sd_vec)))
+squared_error_loss_array  <- array(dim=c(2, qmax, nreps, length(beta_sd_vec)))
+count  <- 1
+for(beta_sd in beta_sd_vec) {
+    for(rep in 1:nreps) {      
+        for(q in 1:qmax) {
 
             X <- matrix(rnorm(n*q, 0, 1), nrow=n, ncol=q)
 
@@ -159,10 +159,11 @@ for(rep in 1:nreps) {
 
             print(sprintf("-------------------------------------------------- No Mean:, %i, %i: %f, %f, %f ----------------", rep, beta_sd, subspace_sim_array[1, q, rep, count], steins_loss_array[1, q, rep, count], squared_error_loss_array[1, q, rep, count]))
             print(sprintf("--------------------------------------------------- With Mean:, %i, %i: %f, %f, %f ----------------", rep, beta_sd, subspace_sim, steins_loss, se_loss))
-            count <- count + 1
+
         }
 
         save(subspace_sim_array, steins_loss_array, squared_error_loss_array, file="sim_mean_results.Rdata")
     }
+    count <- count + 1
 }
 save(subspace_sim_array, steins_loss_array, squared_error_loss_array, file="sim_mean_results.Rdata")

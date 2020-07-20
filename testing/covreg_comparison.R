@@ -78,7 +78,7 @@ qmax <- 4
 ## dimension of v
 s <- 4
 
-sfit <- c(s, 2*s, 3*s, p)
+sfit <- c(2:s, 2*s, 3*s, p)
 
 create_cov_eigen <- function(X, gammaList, s, scaler=1) {
     
@@ -118,8 +118,9 @@ for(q_cur in 1:qmax) {
             Y  <- Z %*% t(V)  +
                 matrix(rnorm(n * (p-s), sd=error_sd), nrow=n, ncol=p-s) %*% t(Vnull)
 
-            s_count <- 1
-            for(s_cur in sfit) {
+            s_count <- 2
+            ## for(s_cur in sfit) {
+            for(s_cur in 2:(s-1)) {
 
                 if(s_cur == p) {
 
@@ -187,12 +188,12 @@ for(q_cur in 1:qmax) {
                 s_count <- s_count + 1
             }
 
-            save(subspace_sim_array, steins_loss_array, squared_error_loss_array, file="sim_s_comparison.Rdata")
+            save(subspace_sim_array, steins_loss_array, squared_error_loss_array, file="sim_s_comparison_full.Rdata")
         }
 
         beta_count <- beta_count + 1
     }
 
-    save(subspace_sim_array, steins_loss_array, squared_error_loss_array, file="sim_s_comparison.Rdata")
+    save(subspace_sim_array, steins_loss_array, squared_error_loss_array, file="sim_s_comparison_full.Rdata")
 }
 
