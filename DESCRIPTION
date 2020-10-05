@@ -4,13 +4,14 @@ Title: Large-scale Envelope Estimation in the Spiked Model
 Version: 0.1.0
 Depends:
   R (>= 3.5),
-  rstiefel,
   tidyverse,
   reticulate,
   Matrix,
   ggrepel,
   ggforce,
   patchwork
+Remotes:
+  github::pdhoff/rstiefel
 Author: Alexander Franks
 Maintainer: The package maintainer <afranks@pstat.ucsb.edu>
 Description: More about what it does (maybe more than one line)
