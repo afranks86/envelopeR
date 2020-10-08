@@ -351,7 +351,10 @@ optimize_envelope_covreg <- function(Y, X,
                                      searchParams=NULL,
                                      verbose_covreg = FALSE,
                                      fmean = NULL,
-                                     fcov = NULL, ...) {
+                                     fcov = NULL,
+                                     tol_f = 1e-8,
+                                     tol_v = 1e-8,
+                                     ...) {
 
 
   Y <- Y %*% D
@@ -465,8 +468,7 @@ optimize_envelope_covreg <- function(Y, X,
     Fcur <- F(V)
     Fprev <- Fcur + abs(Fcur)
     Finit <- Fprev
-    tol_f <- 1e-8
-    tol_v <- 1e-8
+
 
   ## (Fprev-Fcur) / (abs(Finit - Fcur) + 1) > tol_f &
     while(sqrt(sum((Vprev - V)^2)/n) > tol_v & count < max_count) {
@@ -942,5 +944,3 @@ optimize_envelope_cook <- function(Y, X, D = diag(ncol(Y)),
     }
 
 }
-
-
