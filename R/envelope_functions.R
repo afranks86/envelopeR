@@ -483,9 +483,7 @@ custom_estep <- function(YV, X,  cov_dim=ncol(YV),
       muSigInvList[[i]]  <- Reduce(`+`, muSigInvSamples)/nsamples
     }
 
-  } else if(method == "vb") {
-
-
+  }
 
   list(SigInvList = SigInvList, muSigInvList = muSigInvList,
        covreg_res=cov_reg_fit)
