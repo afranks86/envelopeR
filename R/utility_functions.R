@@ -639,3 +639,10 @@ compute_log_likelihood  <- function(Y, index_map, mu_array, sigma_array) {
                                         log=TRUE))
       )
 }
+
+
+steinsLoss <- function(C1, C2inv) {
+
+  sum(diag(C1 %*% C2inv)) - log(det(C1 %*% C2inv)) - nrow(C1)
+
+}
