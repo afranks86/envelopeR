@@ -5,24 +5,7 @@ library(rstiefel)
 library(glmnet)
 library(covreg)
 library(envelopeR)
-
-
-## create_cov_eigen <- function(X, scaler=1) {
-
-##     indices_default  <- 1:3
-##     Xnew  <- ifelse(indices_default > ncol(X), X[ncol(X)], X[indices_default])
-
-##     theta <- pi/2*Xnew[1]
-##     Lambda <- diag(c(20, 2, 0.5*Xnew[2]+0.5, 0.25*Xnew[3] + 0.25))*scaler
-
-##     U1 <- matrix(c(cos(theta), sin(theta), -sin(theta), cos(theta)), ncol=2)
-##     U2  <- diag(2)
-##     U  <- as.matrix(Matrix::bdiag(U1, U2))
-##     sig_X <- U %*% Lambda  %*% t(U)
-##     as.matrix(sig_X)
-
-## }
-
+library(lubridate)
 
 ## Number of features
 p <- 25
@@ -46,7 +29,7 @@ qmax <- 4
 ## dimension of v
 s <- 4
 
-sfit <- c(s, 2*s, 3*s, p)
+sfit <- c(2:s, 2*s, 3*s, p)
 
 create_cov_eigen <- function(X, gammaList, s, scaler=1) {
     
@@ -59,6 +42,7 @@ create_cov_eigen <- function(X, gammaList, s, scaler=1) {
     sig_X
 }
 
+file_name <- sprintf("sim_s_comparison_%s.Rdata", lubridate::today())
 subspace_sim_array  <- array(dim=c(length(sfit), nreps,  qmax, length(beta_sd_vec)))
 steins_loss_array  <- array(dim=c(length(sfit), nreps, qmax, length(beta_sd_vec)))
 squared_error_loss_array  <- array(dim=c(length(sfit), nreps, qmax, length(beta_sd_vec)))
@@ -155,12 +139,12 @@ for(q_cur in 1:qmax) {
                 s_count <- s_count + 1
             }
 
-            save(subspace_sim_array, steins_loss_array, squared_error_loss_array, file="sim_s_comparison.Rdata")
+            save(subspace_sim_array, steins_loss_array, squared_error_loss_array, file=file_name)
         }
 
         beta_count <- beta_count + 1
     }
 
-    save(subspace_sim_array, steins_loss_array, squared_error_loss_array, file="sim_s_comparison.Rdata")
+    save(subspace_sim_array, steins_loss_array, squared_error_loss_array, file=file_name)
 }
 
