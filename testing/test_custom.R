@@ -5,7 +5,31 @@ sm  <- stan_model("../src/stan_files/mvregression.stan")
 
 sampler <- function(YV, X) {
 
-  stan_fit  <- sampling(sm, data=list(y=YV, x=X, K=ncol(Y), J=ncol(X), N=nrow(YV)))
+  stan_fit  <- sampling(sm, data=list(y=YV, x=X, K=ncol(YV), J=ncol(X), N=nrow(YV)))
+  browser()
+
+  samples  <- extract(stan_fit)
+  nsamples  <- length(samples$lp__)
+  for(i in 1:nrow(X)) {
+      SigInvSamples  <- lapply(1:nsamples, function(s) {
+        Linv  <- solve(samples$L_Sigma[i, ,])
+        Prec  <- t(Linv) %*% Linv
+        Prec
+      })
+      SigInvList[[i]]  <- Reduce(`+`, SigInvSamples)/nsamples
+      eta  <- samples$beta
+      muSigInvSamples  <- lapply(1:nsamples, function(s) {
+        X %*% t(eta[s, , ]) %*%  SigInvSamples[[s]]
+      })
+
+      muSigInvList[[i]]  <- Reduce(`+`, muSigInvSamples)/nsamples
+    }
+  SigInvXList  <- lapply(1:4000, function(i) {
+
+  })
+    mu  <- X %*% t(samples$beta[i, , ])
+
+
 
   SigInvXList  <-  estep$SigInvList
   muSigXList  <-  estep$muSigInvList
@@ -36,11 +60,17 @@ Y <- cattle_data %>% dplyr::select(-c(1, 2)) %>% as.matrix
 X <- cattle_data %>% dplyr::select(Treatment) %>% mutate(Treatment = 1*(Treatment == "Treatment")) %>% as.matrix
 
 ## Single fit analysis
-s <- 2
-r <- 9
+s <- 4
+r <- 0
 
-res <- fit_envelope(Y=Y, X=X, s=s, r=r, maxIters=1000, prior_counts=0, Vinit="OLS", distn="cook")
-res$beta_env
+res <- fit_envelope(Y=Y, X=X, s=s, r=r, maxIters=1000, prior_counts=0, Vinit="OLS", distn="custom", posterior_mean_function=sampler)
+
+res <- fit_envelope(Y=Y, X=X, s=s, r=r, maxIters=1000, prior_counts=0, Vinit="OLS", nchunks=5, posterior_mean_function=sampler)
+res1  <- res$beta_env
+res <- fit_envelope(Y=Y, X=X, s=s, r=r, maxIters=1000, prior_counts=0, Vinit="OLS", nchunks=s+r, posterior_mean_function=sampler)
+res2  <- res$beta_env
+plot(res1, res2)
+res <- fit_envelope(Y=Y, X=X, s=s, r=r, maxIters=1000, prior_counts=0, Vinit=res$V, nchunks=1, posterior_mean_function=sampler)
 
 tibble(Date=as.numeric(colnames(cattle_data)[-c(1:2)]),
        Envelope=as.numeric(res$beta_env),

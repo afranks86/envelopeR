@@ -1,7 +1,5 @@
 library(tidyverse)
-
-
-
+library(cubelyr)
 
 boot_sd <- function(val, nboot=1000) {
   sd(sapply(1:nboot, function(i) mean(sample(val, length(val), replace=TRUE), na.rm=TRUE)))
@@ -10,11 +8,12 @@ boot_sd <- function(val, nboot=1000) {
 
 
 ### Comparison to full join model
-load("../results/remote/sim_s_comparison.Rdata")
+## load("../results/remote/sim_s_comparison.Rdata")
+load("../results/sim_s_comparison_2020-10-16.Rdata")
 ### SECTION 2 SIM RESULTS
 
 array  <- steins_loss_array[, , , 1]
-dnames  <- list(Stilde = c(4, 8, 12, 25),
+dnames  <- list(Stilde = c(2, 3, 4, 8, 12, 25),
                 Rep = 1:100,
                 NumCov = 1:4)
 dimnames(array) <-  dnames
@@ -39,7 +38,7 @@ loss_plot <- array_long %>%
   ylab("Percent increase in risk") +
   xlab(expression(tilde(s)))
 loss_plot
-ggsave(file="../figs/s_misspecification.pdf", loss_plot)
+ggsave(file="../figs/s_misspecification_full.pdf", loss_plot)
 
 
 #################################################
@@ -91,3 +90,48 @@ score_tib  %>% group_by(NumCov, Beta)  %>%
 scores_plot
 ggsave(scores_plot, file="../figs/scores_plot.pdf")
 
+####################################
+
+# Sensitivity to initial values
+
+library(tidyverse)
+library(cubelyr)
+load("../results/init_sims_full.Rdata")
+
+# pars <- sapply(params, function(x) bquote(beta ~ .(x["beta"]) ~ gamma == .(x["gamma"])))
+pars <- sapply(params, function(x) sprintf("\u03b2=%.2f, \u03a9=%.2f", round(x["beta"], 2), round(x["gamma"], 2)))
+
+dimnames(subspace_init_mat) <- dimnames(subspace_sim_mat) <- list(Param=pars, Type=c("Random", "OLS"), Rep=paste0("Rep", 1:10))
+
+sim_tib <- as.tbl_cube(subspace_sim_mat, met="Score") %>% as_tibble
+sim_tib$Class <- "Final"
+init_tib <- as.tbl_cube(subspace_init_mat, met="Score") %>% as_tibble
+init_tib$Class <- "Initial"
+rbind(sim_tib, init_tib) %>%
+  ggplot(aes(x=fct_relevel(Class, "Initial", "Final"), y=Score, color=Type, group=interaction(Rep, Type))) +
+  geom_line(position=position_jitter(w=0.1, h=0)) + theme_minimal(base_size=16) +
+  ## geom_point(size=0.5) +
+  facet_wrap(~ Param) +
+  xlab("") + ggtitle("Importance of Initialization") ->
+  init_plot
+
+ggsave(init_plot, file="../figs/initialization.pdf")
+
+####################################
+# Run time results
+
+library(tidyverse)
+library(cubelyr)
+load("../results/benchmark_times.RData")
+
+benchmark_tib <- as.tbl_cube(benchmark_array, met="time") %>% as_tibble
+
+benchmark_tib %>% ggplot(aes(x=p, y=time, col=as.factor(s))) +
+  geom_point(position=position_jitter(h=0)) +
+  theme_bw(base_size=16) +
+  ylab("time (seconds)") +
+  labs(col="s") ->
+  time_benchmark
+
+
+ggsave(init_plot, file="../figs/initialization.pdf")

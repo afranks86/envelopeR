@@ -94,7 +94,7 @@ dF_norm <- function(V, Y, resid, n, p, s, r, q, v1, v0, U1, U0,
 
 }
 
-## compute gradient of negative log-likelihood?
+## compute gradient of negative log-likelihood
 dFi_norm <- function(Vi, Y, YN, indices, s_indices, r_indices,
                      RN, n, p, s, r, q, v1, v0, U1, U0,
                      prior_diff, Lambda0, alpha, nu, L,
@@ -346,14 +346,25 @@ covariance_regression_estep <- function(YV, X,  method="covreg",
                                         niter=niter, nthin=nthin, verb=verb)
     nsamples  <- niter/nthin
 
-    cov_psamp  <- covreg::cov.psamp(cov_reg_fit)
+    cov_psamp  <- cov_psamp(cov_reg_fit)
     m_psamp  <- covreg::m.psamp(cov_reg_fit)
+    browser()
+    Xcov  <- cov_reg_fit$matrix.cov
+    Xmean  <- cov_reg_fit$matrix.mean
+    cov_indices  <- sapply(1:nrow(Xcov), function(i) which(apply(unique(Xcov), 1, function(x) all.equal(x, Xcov[i, ,drop=FALSE]) == "TRUE")))
 
-    indices  <- sapply(1:nrow(X), function(i) which(apply(unique(X), 1, function(x) all.equal(x, X[i, ]) == "TRUE")))
-
+    if(nrow(unique(Xcov)) == 1)
+      cov_indices <- rep(1, nrow(Xcov))
+    else
+      cov_indices  <- sapply(1:nrow(Xcov), function(i) which(apply(unique(Xcov), 1, function(x) all.equal(x, Xcov[i, ,drop=FALSE]) == "TRUE")))
+    if(nrow(unique(Xmean))==1)
+      mean_indices <- rep(1, nrow(Xmean))
+    else
+      mean_indices  <- sapply(1:nrow(Xmean), function(i) which(apply(unique(Xmean), 1, function(x) isTRUE(all.equal(x, Xmean[i, ])))))
+    
     for(i in 1:nrow(X)) {
       SigInvSamples  <- lapply(1:nsamples, function(s) {
-        SigInv  <- solve(cov_psamp[indices[i], , , s])
+        SigInv  <- solve(cov_psamp[cov_indices[i], , , s])
       })
       SigInvList[[i]]  <- Reduce(`+`, SigInvSamples)/nsamples
 
@@ -363,7 +374,7 @@ covariance_regression_estep <- function(YV, X,  method="covreg",
         if(dim(m_psamp)[1] == 1)
           t(m_psamp[1, , s]) %*%  SigInvSamples[[s]]
         else
-          t(m_psamp[indices[i], , s]) %*%  SigInvSamples[[s]]
+          t(m_psamp[mean_indices[i], , s]) %*%  SigInvSamples[[s]]
 
       })
 
@@ -418,6 +429,7 @@ covariance_regression_estep <- function(YV, X,  method="covreg",
   list(SigInvList = SigInvList, muSigInvList = muSigInvList,
        covreg_res=cov_reg_fit)
 }
+
 
 
 
@@ -568,6 +580,31 @@ get_mean_cov_hat <- function(fit, inv=FALSE)
         else
             s.psamp[i, , ] <- s.psamp[i, , ]/nsave
     }
+    s.psamp
+
+}
+
+cov_psamp  <- function (fit)
+{
+    A.psamp = fit$A.psamp
+    B.psamp = fit$B2.psamp
+    nsave = dim(A.psamp)[3]
+    p = dim(A.psamp)[1]
+    R = dim(B.psamp)[3]
+    X = unique(fit$matrix.cov)
+    n = dim(X)[1]
+    s.psamp = array(dim = c(n, p, p, nsave))
+    for (iter in 1:nsave) {
+        for (i in 1:n) {
+            ss = A.psamp[, , iter]
+            for (r in 1:R) {
+                ss = ss + B.psamp[, , r, iter] %*% X[i, , drop=FALSE] %*%
+                  t(X[i, , drop=FALSE]) %*% t(B.psamp[, , r, iter])
+            }
+            s.psamp[i, , , iter] = ss
+        }
+    }
+
     s.psamp
 
 }
