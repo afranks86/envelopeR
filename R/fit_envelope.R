@@ -35,6 +35,11 @@ fit_envelope <- function(Y, X, distn = "normal", ...){
         cook_fit <- optimize_envelope_cook(Y, X, ...)
         cook_fit
         
+    } else if (distn == "custom") {
+
+        custom_fit <- optimize_envelope_custom(Y, X, ...)
+        custom_fit
+
     } else if (distn == "cook_kd") {
         cook_fit <- optimize_envelope_cook_kd(Y, X, ...)
         cook_fit
@@ -75,7 +80,7 @@ optimize_envelope <- function(Y, X, D = diag(ncol(Y)),
                               U1=matrix(0, nrow=s, ncol=s),
                               U0=matrix(0, nrow=r, ncol=r),
                               alpha=0, nu=0, nchunks = 1, L=0,
-                              center=TRUE, maxIters=1000, use_py=FALSE,
+                              center=TRUE, maxIters=1000,
                               searchParams=NULL, ...) {
     
     Y <- Y %*% D
@@ -183,19 +188,6 @@ optimize_envelope <- function(Y, X, D = diag(ncol(Y)),
         Fprev <- F(V)
         Vprev <- V
         
-        ## df <- dF(V)
-        ## rotS <- svd(df[, 1:s])$v
-        ## if(r > 0) {
-        ##     rotR <- svd(df[, (s+1):(s+r)])$v
-        ##     V <- V %*% as.matrix(Matrix::bdiag(list(rotS, rotR)))
-        ## } else {
-        ##     V <- V %*% rotS
-        ## }
-        
-        ## indices_mat <- suppressWarnings(matrix(1:ncol(V),
-        ##                                        ncol=min(nchunks, ncol(V)),
-        ##                                        byrow=TRUE))
-
 
         if(nchunks == 1) {
             print(sprintf("------ F(V) = %f --------", F(V)))
@@ -225,13 +217,14 @@ optimize_envelope <- function(Y, X, D = diag(ncol(Y)),
             start <- Sys.time()
             for(i in 1:nrow(indices_mat)) {
 
+
                 indices <- sort(indices_mat[i, ])
                 
                 s_indices <- indices[indices <= s]
                 r_indices <- indices[indices > s]
                 
                 Vfixed <- V[, -indices, drop=FALSE]
-                NullVfixed <- NullC(Vfixed)        
+                NullVfixed <- NullC(Vfixed)
 
                 ## Fixed part
                 if(r > 0) {
@@ -271,7 +264,7 @@ optimize_envelope <- function(Y, X, D = diag(ncol(Y)),
                 pars_i$Y <- YN
                 pars_i$resid <- RN
                 pars_i$prior_diff <- PN
-                
+
                 Fi <- function(Vi)  {
                     if(length(s_indices) > 0)
                         NV[, s_indices] <- Vi[, 1:length(s_indices), drop=FALSE]
@@ -299,12 +292,13 @@ optimize_envelope <- function(Y, X, D = diag(ncol(Y)),
                 }
 
 
-                print(sprintf("------ F(V) = %f --------", F(V)))
+              print(sprintf("------ F(V) = %f --------", F(V)))
+
                 Vi_fit <- rstiefel::optStiefel(
                                         Fi,
                                         dFi,
                                         method = "bb",
-                                        Vinit = t(NullVfixed) %*% V[, indices],
+                                        Vinit = NV, ##t(NullVfixed) %*% V[, indices],
                                         verbose = TRUE,
                                         maxIters = maxIters,
                                         maxLineSearchIters = 25,
@@ -347,7 +341,7 @@ optimize_envelope_covreg <- function(Y, X,
                                      U1=NULL,
                                      U0=NULL,
                                      alpha=0, nu=0, nchunks = 1, L=0,
-                                     center=TRUE, maxIters=1000, use_py=FALSE,
+                                     center=TRUE, maxIters=1000,
                                      searchParams=NULL,
                                      verbose_covreg = FALSE,
                                      fmean = NULL,
@@ -514,7 +508,10 @@ optimize_envelope_covreg <- function(Y, X,
 
   estep  <- covariance_regression_estep(YV=Yproj, X=X,
                                         method="covreg",
-                                        sm=sm, verb=verbose_covreg)
+                                        cov_dim=cov_dim,
+                                        sm=sm, verb=verbose_covreg,
+                                        fmean=fmean,
+                                        fcov=fcov)
 
 
 
@@ -532,20 +529,31 @@ optimize_envelope_covreg <- function(Y, X,
 optimize_envelope_custom <- function(Y, X,
                                      D = diag(ncol(Y)),
                                      s=2, r=0,
+                                     posterior_mean_function=NULL,
                                      Vinit = "OLS",
-                                     posterior_means_function=NULL,
-                                     center=TRUE, maxIters=1000, use_py=FALSE,
-                                     searchParams=NULL,
-                                     verbose_covreg = FALSE,
-                                     fmean = NULL,
-                                     fcov = NULL, ...) {
+                                     Lambda0 = t(X) %*% X,
+                                     prior_counts=0,
+                                     Beta0 = matrix(0, nrow=ncol(X), ncol=ncol(Y)),
+                                     v1=0, v0 = 0,
+                                     cov_dim = s,
+                                     U1=NULL,
+                                     U0=NULL,
+                                     alpha=0, nu=0, nchunks = 1, L=0,
+                                     center=TRUE, maxIters=1000,
+                                     searchParams=NULL) {
 
 
   Y <- Y %*% D
   n <- nrow(Y)
   p <- ncol(Y)
   q <- ncol(X)
-  
+
+  L0 <- chol(Lambda0) * sqrt(prior_counts / n)
+  Lambda0 <- Lambda0 * prior_counts / n
+
+  beta_hat <- solve(t(X) %*% X + Lambda0) %*% (t(X) %*% Y + Lambda0 %*% Beta0)
+  resid <- Y - X %*% beta_hat
+
   if(is.null(posterior_mean_function)) {
     stop("Must specify posterior_mean_function")
   }
@@ -695,7 +703,7 @@ optimize_envelope_cook <- function(Y, X, D = diag(ncol(Y)),
                                    U1=matrix(0, nrow=s, ncol=s),
                                    U0=matrix(0, nrow=r, ncol=r),
                                    alpha=0, nu=0, nchunks = 1, L=0,
-                                   center=TRUE, maxIters=1000, use_py=FALSE,
+                                   center=TRUE, maxIters=1000,
                                    searchParams=NULL, ...) { 
 
 
