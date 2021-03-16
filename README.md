@@ -4,5 +4,6 @@
 
 # Example dataset
 
+Generate an example dataset.
 
 # Applying the envelope covariance regression model
