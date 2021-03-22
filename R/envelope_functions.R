@@ -356,21 +356,21 @@ covariance_regression_estep <- function(YV, X,  method="covreg",
     if(nrow(unique(Xcov)) == 1)
       cov_indices <- rep(1, nrow(Xcov))
     else
-      cov_indices  <- sapply(1:nrow(Xcov), function(i) which(apply(unique(Xcov), 1, function(x) all.equal(x, Xcov[i, ]) == "TRUE")))
-
+      cov_indices  <- sapply(1:nrow(Xcov), function(i) which(apply(unique(Xcov), 1, function(x) isTrue(all.equal(x, Xcov[i, ], check.attributes=FALSE)))))
+    # Find index of first occurrence of Xmean
     if(nrow(unique(Xmean))==1)
       mean_indices <- rep(1, nrow(Xmean))
     else
-      mean_indices  <- sapply(1:nrow(Xmean), function(i) which(apply(unique(Xmean), 1, function(x) isTRUE(all.equal(x, Xmean[i, ])))))
+      mean_indices  <- sapply(1:nrow(Xmean), function(i) which(apply(unique(Xmean), 1, function(x) isTRUE(all.equal(x, Xmean[i, ], check.attributes=FALSE)))))
     
     for(i in 1:nrow(X)) {
+      browser()
       SigInvSamples  <- lapply(1:nsamples, function(s) {
         SigInv  <- solve(cov_psamp[cov_indices[i], , , s])
       })
       SigInvList[[i]]  <- Reduce(`+`, SigInvSamples)/nsamples
 
       muSigInvSamples  <- lapply(1:nsamples, function(s) {
-
 
         if(dim(m_psamp)[1] == 1)
           t(m_psamp[1, , s]) %*%  SigInvSamples[[s]]

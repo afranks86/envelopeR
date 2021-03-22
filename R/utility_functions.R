@@ -646,3 +646,45 @@ steinsLoss <- function(C1, C2inv) {
   sum(diag(C1 %*% C2inv)) - log(det(C1 %*% C2inv)) - nrow(C1)
 
 }
+
+
+generate_test_data  <- function(n=100, p=10, s=2, q=1,
+                                beta_sd = 2, gamma_sd=4, error_sd=0.5) {
+
+  X <- matrix(rnorm(n*q), nrow=n, ncol=q)
+
+  ## Regression coefficients
+  beta <- matrix(rnorm(q*s, sd=beta_sd), nrow=q)
+
+  ## Covariance regression coefficients
+
+  sig_x_rank <- s
+
+  create_cov_eigen <- function(X, gammaList, s, scaler=1) {
+
+    sig_X <- matrix(0, ncol=s, nrow=s)
+    for(i in 1:s) {
+        gammaX <- gammaList[[i]] %*% t(X)
+        sig_X <- sig_X + tcrossprod(gammaX)
+    }
+
+    sig_X
+  }
+  gammaList <- lapply(1:s, function(i) matrix(rnorm(s*q, 0, sd=gamma_sd), nrow=s, ncol=q))
+  cov_list  <- lapply(1:n, function(i) create_cov_eigen(X[i, , drop=FALSE], gammaList, s, scaler=1) + error_sd^2 * diag(s))
+
+
+  Z <- sapply(1:n, function(i) {
+    rmvnorm(1, X[i, ] %*% beta, sigma=cov_list[[i]])
+  }) %>% t
+
+  V  <- rustiefel(p, s)
+  Vnull  <- rstiefel::NullC(V)
+
+  Y  <- Z %*% t(V)  +
+    matrix(rnorm(n * (p-s), sd=error_sd), nrow=n, ncol=p-s) %*% t(Vnull)
+
+  list(Y=Y, X=X, n=n, p=p, s=s, V=V, cov_list=cov_list,
+       args=as.list(environment())[names(formals())])
+
+}
