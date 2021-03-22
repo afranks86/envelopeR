@@ -46,7 +46,6 @@ create_plots <- function(V, samples, n1, n2=NULL, view=c(1,2), nlabeled=20,
                          to_plot=NULL, obs_names=NULL, R=ncol(V),
                          labels=rownames(V), legend.title="",
                          label_size=2, plot_type="both", col_values=NULL, ...) {
-
   rownames(V)  <- labels
   rotation_result <- rotate_basis(V, samples, n1, n2)
 
@@ -79,6 +78,8 @@ create_plots <- function(V, samples, n1, n2=NULL, view=c(1,2), nlabeled=20,
   }
 
   obs_to_plot  <- 1:length(to_plot)
+  if(is.null(obs_names))
+    obs_names <- names(to_plot)
   names(obs_to_plot)  <-  obs_names[to_plot]
 
   posterior_legend <- ifelse(plot_type == "both", FALSE, TRUE)
@@ -190,7 +191,7 @@ posteriorPlot <- function(covSamps, Osamps, OmegaSamps, nsamps, obs_to_plot,
                           col_values=NULL, alpha=1, ...) {
 
   ngroups <- length(obs_to_plot)
-
+  if
   group_names <- names(obs_to_plot)
   if(is.null(group_names))
     group_names = factor(1:ngroups)
