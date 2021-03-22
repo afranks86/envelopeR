@@ -191,7 +191,6 @@ posteriorPlot <- function(covSamps, Osamps, OmegaSamps, nsamps, obs_to_plot,
                           col_values=NULL, alpha=1, ...) {
 
   ngroups <- length(obs_to_plot)
-  if
   group_names <- names(obs_to_plot)
   if(is.null(group_names))
     group_names = factor(1:ngroups)
