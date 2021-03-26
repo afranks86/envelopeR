@@ -77,10 +77,11 @@ create_plots <- function(V, samples, n1, n2=NULL, view=c(1,2), nlabeled=20,
     }
   }
 
+
   obs_to_plot  <- 1:length(to_plot)
   if(is.null(obs_names))
     obs_names <- names(to_plot)
-  names(obs_to_plot)  <-  obs_names[to_plot]
+  names(obs_to_plot)  <-  obs_names
 
   posterior_legend <- ifelse(plot_type == "both", FALSE, TRUE)
   posterior_plot <- posteriorPlot(cov_proj,
@@ -189,7 +190,7 @@ posteriorPlot <- function(covSamps, Osamps, OmegaSamps, nsamps, obs_to_plot,
                           main = NULL,
                           legend.title = NULL,
                           col_values=NULL, alpha=1, ...) {
-
+  browser()
   ngroups <- length(obs_to_plot)
   group_names <- names(obs_to_plot)
   if(is.null(group_names))
@@ -649,29 +650,61 @@ steinsLoss <- function(C1, C2inv) {
 
 
 generate_test_data  <- function(n=100, p=10, s=2, q=1,
-                                beta_sd = 2, gamma_sd=4, error_sd=0.5) {
+                                beta_sd = 2, gamma_sd=4, error_sd=0.5,
+                                cov_rank = s,
+                                intercept=TRUE, seed=NULL) {
+  if(!is.null(seed))
+    set.seed(seed)
 
   X <- matrix(rnorm(n*q), nrow=n, ncol=q)
+  X <- matrix(runif(n*q, 1, 2), nrow=n, ncol=q)
 
   ## Regression coefficients
-  beta <- matrix(rnorm(q*s, sd=beta_sd), nrow=q)
-
+  beta <- matrix(runif(q*s, min=1, max=2*beta_sd), nrow=q)
+  beta <- matrix(rnorm(q*s, beta_sd), nrow=q)
   ## Covariance regression coefficients
 
   sig_x_rank <- s
 
-  create_cov_eigen <- function(X, gammaList, s, scaler=1) {
+  create_cov <- function(X, gammaList, s, scaler=1) {
 
     sig_X <- matrix(0, ncol=s, nrow=s)
-    for(i in 1:s) {
+    for(i in 1:cov_rank) {
         gammaX <- gammaList[[i]] %*% t(X)
         sig_X <- sig_X + tcrossprod(gammaX)
     }
 
     sig_X
   }
-  gammaList <- lapply(1:s, function(i) matrix(rnorm(s*q, 0, sd=gamma_sd), nrow=s, ncol=q))
-  cov_list  <- lapply(1:n, function(i) create_cov_eigen(X[i, , drop=FALSE], gammaList, s, scaler=1) + error_sd^2 * diag(s))
+
+  create_cov_eigen <- function(X, scaler=1) {
+
+    indices_default  <- 1:3
+    Xnew  <- ifelse(indices_default > ncol(X), X[ncol(X)], X[indices_default])
+
+    theta <- pi/2*Xnew[1]
+    Lambda <- diag(c(200, 20, 5*Xnew[2]+5, 2.5*Xnew[3] + 2.5)) * scaler
+
+    U1 <- matrix(c(cos(theta), sin(theta), -sin(theta), cos(theta)), ncol=2)
+    U2  <- diag(2)
+    U  <- Matrix::bdiag(U1, U2)
+    sig_X <- U %*% Lambda  %*% t(U)
+    as.matrix(sig_X)
+
+}
+
+
+  if(intercept==TRUE) {
+    qstar  <- q+1
+    Xstar  <- cbind(rep(1, n), X)
+  }
+  else {
+    qstar  <- q
+    Xstar  <- X
+  }
+
+  gammaList <- lapply(1:s, function(i) matrix(rnorm(s*qstar, 0, sd=gamma_sd), nrow=s, ncol=qstar))
+  cov_list  <- lapply(1:n, function(i) create_cov(Xstar[i, , drop=FALSE], gammaList, s, scaler=1) + error_sd^2 * diag(s))
 
 
   Z <- sapply(1:n, function(i) {

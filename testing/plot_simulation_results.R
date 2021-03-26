@@ -41,6 +41,11 @@ loss_plot
 ggsave(file="../figs/s_misspecification_full.pdf", loss_plot)
 
 
+## Goodnness of fit test
+load("../results/sim_s_comparison_2020-10-16.Rdata")
+
+
+
 #################################################
 
 load("../results/remote/sim_mean_results.Rdata")
