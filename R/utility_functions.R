@@ -46,6 +46,7 @@ create_plots <- function(V, samples, n1, n2=NULL, view=c(1,2), nlabeled=20,
                          to_plot=NULL, obs_names=NULL, R=ncol(V),
                          labels=rownames(V), legend.title="",
                          label_size=2, plot_type="both", col_values=NULL, ...) {
+
   rownames(V)  <- labels
   rotation_result <- rotate_basis(V, samples, n1, n2)
 
@@ -160,7 +161,7 @@ rotate_basis <- function(V, samples, n1=1, n2=NULL) {
   }
 
   Vstar <- V[, 1:S] %*% O
-  list(rotV=Vstar, rotmat=O)
+  list(rotV=Vstar, rotMat=O)
 
 }
 
