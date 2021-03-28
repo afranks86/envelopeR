@@ -1,0 +1,125 @@
+---
+title: "Readme"
+author: "Alex Franks"
+date: "3/28/2021"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Background
+
+`envelopeR` is the R package associated with the paper ``Reducing Subspace Models for Large-Scale Covariance Regression''.  
+
+**Summary:** We develop an envelope model for joint mean and covariance regression in the large $p$, small $n$ setting.  In contrast to existing envelope methods, which improve mean estimates by incorporating estimates of the covariance structure, we focus on identifying covariance heterogeneity by incorporating information about mean-level differences.  We use a Monte Carlo EM algorithm to identify a low-dimensional
+subspace which explains differences in both means and covariances as a function of covariates, and then use MCMC to estimate the posterior uncertainty conditional on the inferred low-dimensional subspace. We demonstrate the utility of our model on a motivating application on the metabolomics of aging.  
+
+Preprint: [https://arxiv.org/abs/2010.00503](https://arxiv.org/abs/2010.00503)
+
+## Installation
+
+```{r, message=FALSE}
+devtools::install_github("afranks86/envelopeR")
+
+library(tidyverse)
+library(covreg)
+library(envelopeR)
+library(rstiefel)
+library(mvtnorm)
+```
+
+## A Test Dataset
+
+
+```{r generate_test}
+
+
+test_data <- generate_test_data(q=2, cov_rank=2, intercept=TRUE, gamma_sd=1, error_sd=1, seed=4445)
+Y <- test_data$Y
+X  <- test_data$X
+s  <- test_data$s
+p  <- test_data$p
+V  <- test_data$V
+```
+
+## Fit the Envelope model
+
+```{r fit_envelope}
+envfit <- fit_envelope(Y, X, distn="covreg", s=s,
+                       Vinit="OLS",
+                       verbose_covreg=FALSE)
+```
+
+
+Check inferred subspace is close to the true material subspace (1 means they are identical subspaces).
+
+```{r}
+tr(envfit$V  %*% t(envfit$V)  %*% V  %*% t(V))/s
+```
+
+
+Re-run full Bayesian inference conditional on the inferred subspace of material variation.  Alternatively, can get `cov_psamp` from the list returned by `fit_envelope` by running `cov_psamp <- cov.psamp(envfit$covariance_list$covreg_res)`.  
+
+```{r, rerun_mcmc}
+YV  <- Y %*% envfit$V
+res  <-  covreg::covreg.mcmc(YV ~ X - 1, YV ~ X, niter=10000, nthin=10, verb=FALSE)
+cov_psamp  <- covreg::cov.psamp(res)
+cov_psamp  <- cov_psamp[, , , 1:1000]
+```
+
+## Plotting
+
+### Posterior plot
+
+```{r, posterior_plot, dependson="rerun_mcmc"}
+type  <- "mag"
+
+## plot posterior distributions for min, max and quartiles of X
+ix <- sort(X[, 1], index.return=TRUE)$ix
+obs_to_plot <- ix[c(1, 25, 50, 75, 100)]
+
+## values correspond to the quantiles of x
+names(obs_to_plot)  <- c(0, 0.25, 0.5, 0.75, 1)
+
+cols <- colorspace::sequential_hcl(5, "viridis")
+
+
+post  <- create_plots(envfit$V, cov_psamp,
+                      n1=obs_to_plot[1], n2=obs_to_plot[length(obs_to_plot)],
+                      to_plot = obs_to_plot, col_values=cols,
+                      labels=colnames(Y), plot_type="posterior", alpha=0.5)
+post
+```
+
+The true eigenvalues and angles on this two-dimensional subspaces are:
+
+```{r, echo=FALSE, true_vals}
+rotV  <- rotate_basis(envfit$V, cov_psamp, n1=obs_to_plot[1], n2=obs_to_plot[length(obs_to_plot)])$rotV
+R <- t(V) %*% rotV
+Vrot  <- V %*% R
+
+evals  <- sapply(1:5, function(i) eigen(test_data$cov_list[[obs_to_plot[i]]])$values[1])
+angles  <- sapply(1:5, function(i) {
+  evecs  <- eigen(t(R) %*% test_data$cov_list[[obs_to_plot[i]]] %*% R)$vectors
+  atan(evecs[2, 1] / evecs[1, 1])
+})
+
+tibble(quantile=names(obs_to_plot), eval=evals, angle=angles)
+```
+
+### Biplot
+
+```{r, biplot, warn=FALSE}
+rownames(envfit$V)  <- 1:p
+biplot  <- create_plots(envfit$V, cov_psamp,
+                        n1=obs_to_plot[1], n2=obs_to_plot[length(obs_to_plot)],
+                        to_plot = obs_to_plot, col_values=cols,
+                        labels=colnames(Y), plot_type="biplot")
+biplot
+```
+
+
+
+
