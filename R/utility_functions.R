@@ -160,7 +160,7 @@ rotate_basis <- function(V, samples, n1=1, n2=NULL) {
   }
 
   Vstar <- V[, 1:S] %*% O
-  list(rotV=Vstar, rotMat=O)
+  list(rotV=Vstar, rotmat=O)
 
 }
 
@@ -190,7 +190,6 @@ posteriorPlot <- function(covSamps, Osamps, OmegaSamps, nsamps, obs_to_plot,
                           main = NULL,
                           legend.title = NULL,
                           col_values=NULL, alpha=1, ...) {
-  browser()
   ngroups <- length(obs_to_plot)
   group_names <- names(obs_to_plot)
   if(is.null(group_names))
@@ -649,7 +648,7 @@ steinsLoss <- function(C1, C2inv) {
 
 }
 
-
+  q
 generate_test_data  <- function(n=100, p=10, s=2, q=1,
                                 beta_sd = 2, gamma_sd=4, error_sd=0.5,
                                 cov_rank = s,
@@ -681,7 +680,7 @@ generate_test_data  <- function(n=100, p=10, s=2, q=1,
   create_cov_eigen <- function(X) {
 
     theta <- pi/2*X
-    Lambda <- diag(c(10*X + 7.5, 2.0))
+    Lambda <- diag(c(15*X + 7.5, 2.0))
 
     U <- matrix(c(cos(theta), sin(theta), -sin(theta), cos(theta)), ncol=2)
     sig_X <- U %*% Lambda  %*% t(U)
