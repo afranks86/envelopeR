@@ -374,6 +374,7 @@ covarianceBiplot <- function(Vsub, projected_samples, obs_to_plot=1:dim(projecte
 
   p <- p + geom_point(data=label_data, aes(x=x, y=y), col="red", size=1.5)
 
+
   if(is.null(custom_label_data)) {
     p <- p + geom_label_repel(
                data  = subset(label_data, type=="pos_x"),
@@ -383,7 +384,7 @@ covarianceBiplot <- function(Vsub, projected_samples, obs_to_plot=1:dim(projecte
                segment.size  = 0.5,
                segment.color = "grey50",
                direction     = "y",
-               xlim=c(0.7*median(Vsub[pos_x_indices, 1]), Inf),
+               xlim=c(0.7*median(Vsub[pos_x_indices, 1]), xlimits[2]),
                hjust         = 0,
                size = label_size
              ) +
@@ -396,7 +397,7 @@ covarianceBiplot <- function(Vsub, projected_samples, obs_to_plot=1:dim(projecte
         segment.color = "grey50",
         direction     = "y",
         hjust         = 1,
-        xlim=c(-Inf, 0.7*median(Vsub[neg_x_indices, 2])),
+        xlim=c(xlimits[1], 0.7*median(Vsub[neg_x_indices, 2])),
         size= label_size
       ) +
       geom_label_repel(
@@ -407,7 +408,7 @@ covarianceBiplot <- function(Vsub, projected_samples, obs_to_plot=1:dim(projecte
         segment.size  = 0.5,
         segment.color = "grey50",
         direction = "both",
-        ylim=c(0.7*median(Vsub[pos_y_indices, 2]), Inf),
+        ylim=c(0.7*median(Vsub[pos_y_indices, 2]), ylimits[2]),
         size = label_size
       ) +
       geom_label_repel(
@@ -418,7 +419,7 @@ covarianceBiplot <- function(Vsub, projected_samples, obs_to_plot=1:dim(projecte
         segment.size  = 0.5,
         segment.color = "grey50",
         direction     = "both",
-        ylim=c(-Inf, 0.7*median(Vsub[neg_y_indices, 2])),
+        ylim=c(ylimits[1], 0.7*median(Vsub[neg_y_indices, 2])),
         size=label_size
       )
   } else {
@@ -657,11 +658,11 @@ generate_test_data  <- function(n=100, p=10, s=2, q=1,
     set.seed(seed)
 
   X <- matrix(rnorm(n*q), nrow=n, ncol=q)
-  X <- matrix(runif(n*q, 1, 2), nrow=n, ncol=q)
+  X <- matrix(runif(n*q, 1, 3), nrow=n, ncol=q)
 
   ## Regression coefficients
   beta <- matrix(runif(q*s, min=1, max=2*beta_sd), nrow=q)
-  beta <- matrix(rnorm(q*s, beta_sd), nrow=q)
+  #beta <- matrix(rnorm(q*s, beta_sd), nrow=q)
   ## Covariance regression coefficients
 
   sig_x_rank <- s
@@ -677,17 +678,12 @@ generate_test_data  <- function(n=100, p=10, s=2, q=1,
     sig_X
   }
 
-  create_cov_eigen <- function(X, scaler=1) {
+  create_cov_eigen <- function(X) {
 
-    indices_default  <- 1:3
-    Xnew  <- ifelse(indices_default > ncol(X), X[ncol(X)], X[indices_default])
+    theta <- pi/2*X
+    Lambda <- diag(c(10*X + 7.5, 2.0))
 
-    theta <- pi/2*Xnew[1]
-    Lambda <- diag(c(200, 20, 5*Xnew[2]+5, 2.5*Xnew[3] + 2.5)) * scaler
-
-    U1 <- matrix(c(cos(theta), sin(theta), -sin(theta), cos(theta)), ncol=2)
-    U2  <- diag(2)
-    U  <- Matrix::bdiag(U1, U2)
+    U <- matrix(c(cos(theta), sin(theta), -sin(theta), cos(theta)), ncol=2)
     sig_X <- U %*% Lambda  %*% t(U)
     as.matrix(sig_X)
 
@@ -706,6 +702,8 @@ generate_test_data  <- function(n=100, p=10, s=2, q=1,
   gammaList <- lapply(1:s, function(i) matrix(rnorm(s*qstar, 0, sd=gamma_sd), nrow=s, ncol=qstar))
   cov_list  <- lapply(1:n, function(i) create_cov(Xstar[i, , drop=FALSE], gammaList, s, scaler=1) + error_sd^2 * diag(s))
 
+  Xscaled  <- (X[, 1] - min(X[, 1])) / max(X[, 1])
+  cov_list  <- lapply(1:n, function(i) create_cov_eigen(Xscaled[i]) + error_sd^2 * diag(s))
 
   Z <- sapply(1:n, function(i) {
     rmvnorm(1, X[i, ] %*% beta, sigma=cov_list[[i]])
