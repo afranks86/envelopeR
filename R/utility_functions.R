@@ -1,7 +1,13 @@
 library(ggforce)
 library(ggrepel)
 
-## Optimal threshold from Gavish, Donoho 2014
+#' ## Optimal low rank threshold from Gavish, Donoho 2014
+#'
+#' @param Y
+#'
+#' @return
+#' @export get_rank
+#'
 getRank <- function(Y) {
 
   svals <- svd(Y)$d
