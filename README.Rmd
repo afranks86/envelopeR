@@ -17,14 +17,14 @@ Preprint: [https://arxiv.org/abs/2010.00503](https://arxiv.org/abs/2010.00503)
 
 ## Installation
 
-```{r, message=FALSE}
+```{r, message=FALSE, warnings=FALSE}
 devtools::install_github("afranks86/envelopeR")
 ```
 
 ## A Test Dataset
 
 
-```{r generate_test}
+```{r generate_test, message = FALSE, warning = FALSE}
 library(envelopeR)
 
 test_data <- generate_test_data(q=2, cov_rank=2, intercept=TRUE, gamma_sd=1, error_sd=1, seed=4445)

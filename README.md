@@ -16,8 +16,7 @@ the posterior uncertainty conditional on the inferred low-dimensional
 subspace. We demonstrate the utility of our model on a motivating
 application on the metabolomics of aging.
 
-Preprint:
-    <https://arxiv.org/abs/2010.00503>
+Preprint: <https://arxiv.org/abs/2010.00503>
 
 ## Installation
 
@@ -29,41 +28,7 @@ devtools::install_github("afranks86/envelopeR")
 
 ``` r
 library(envelopeR)
-```
 
-    ## Loading required package: tidyverse
-
-    ## ── Attaching packages ─────────────────────────────────────── tidyverse 1.3.0 ──
-
-    ## ✓ ggplot2 3.3.3     ✓ purrr   0.3.4
-    ## ✓ tibble  3.1.0     ✓ dplyr   1.0.5
-    ## ✓ tidyr   1.1.3     ✓ stringr 1.4.0
-    ## ✓ readr   1.4.0     ✓ forcats 0.5.1
-
-    ## ── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
-    ## x dplyr::filter() masks stats::filter()
-    ## x dplyr::lag()    masks stats::lag()
-
-    ## Loading required package: Matrix
-
-    ## 
-    ## Attaching package: 'Matrix'
-
-    ## The following objects are masked from 'package:tidyr':
-    ## 
-    ##     expand, pack, unpack
-
-    ## Loading required package: rstiefel
-
-    ## Loading required package: ggrepel
-
-    ## Loading required package: ggforce
-
-    ## Loading required package: mvtnorm
-
-    ## Loading required package: patchwork
-
-``` r
 test_data <- generate_test_data(q=2, cov_rank=2, intercept=TRUE, gamma_sd=1, error_sd=1, seed=4445)
 Y <- test_data$Y
 X  <- test_data$X
