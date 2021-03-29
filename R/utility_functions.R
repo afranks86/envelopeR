@@ -1,7 +1,8 @@
 library(ggforce)
 library(ggrepel)
 
-#' ## Optimal low rank threshold from Gavish, Donoho 2014
+#' getRank
+#' Optimal low rank threshold from Gavish, Donoho 2014
 #'
 #' @param Y
 #'
