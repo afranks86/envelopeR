@@ -727,7 +727,7 @@ generate_test_data  <- function(n=100, p=10, s=2, q=1,
     rmvnorm(1, X[i, ] %*% beta, sigma=cov_list[[i]])
   }) %>% t
 
-  V  <- rustiefel(p, s)
+  V  <- rstiefel::rustiefel(p, s)
   Vnull  <- rstiefel::NullC(V)
 
   Y  <- Z %*% t(V)  +

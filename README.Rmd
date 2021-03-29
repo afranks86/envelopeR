@@ -19,19 +19,13 @@ Preprint: [https://arxiv.org/abs/2010.00503](https://arxiv.org/abs/2010.00503)
 
 ```{r, message=FALSE}
 devtools::install_github("afranks86/envelopeR")
-
-library(tidyverse)
-library(covreg)
-library(envelopeR)
-library(rstiefel)
-library(mvtnorm)
 ```
 
 ## A Test Dataset
 
 
 ```{r generate_test}
-
+library(envelopeR)
 
 test_data <- generate_test_data(q=2, cov_rank=2, intercept=TRUE, gamma_sd=1, error_sd=1, seed=4445)
 Y <- test_data$Y
@@ -43,7 +37,7 @@ V  <- test_data$V
 
 ## Fit the Envelope model
 
-```{r fit_envelope}
+```{r fit_envelope, message=FALSE, results='hide'}
 
 ## `get_rank` can be used to infer the appropriate dimension of hte subspace of material variation
 s_hat <- getRank(Y)
@@ -54,7 +48,7 @@ envfit <- fit_envelope(Y, X, distn="covreg", s=s_hat,
 ```
 
 
-Check inferred subspace is close to the true material subspace (1 means they are identical subspaces).
+Check inferred subspace is close to the true material subspace (1 means they are identical subspaces). We also show that the goodness of fit test on sphericity of the subspace of material variation does not produce a small p-value. 
 
 ```{r}
 print(sprintf("Subspace similarity: %f", 
@@ -101,7 +95,7 @@ post  <- create_plots(envfit$V, cov_psamp,
 post
 ```
 
-The true eigenvalues and angles on this two-dimensional subspaces are:
+The true eigenvalues and angles on this two-dimensional subspaces are below.
 
 ```{r, echo=FALSE, true_vals}
 ## Align subspaces 
