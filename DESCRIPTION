@@ -6,6 +6,7 @@ Depends:
   R (>= 3.5),
   tidyverse,
   Matrix,
+  rstiefel,
   ggrepel,
   ggforce,
   mvtnorm,
