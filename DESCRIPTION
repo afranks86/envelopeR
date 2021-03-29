@@ -8,7 +8,7 @@ Depends:
   Matrix,
   ggrepel,
   ggforce,
-  rmvnorm,
+  mvtnorm,
   patchwork
 Remotes:
   github::pdhoff/rstiefel
