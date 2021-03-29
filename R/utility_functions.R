@@ -7,7 +7,7 @@ library(ggrepel)
 #' @param Y
 #'
 #' @return
-#' @export get_rank
+#' @export getRank
 #'
 getRank <- function(Y) {
 
