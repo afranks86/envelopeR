@@ -1,7 +1,3 @@
-Readme
-================
-Alex Franks
-3/28/2021
 
 ## Background
 
@@ -26,20 +22,7 @@ Preprint: <https://arxiv.org/abs/2010.00503>
 
 ``` r
 devtools::install_github("afranks86/envelopeR")
-```
 
-    ## 
-    ##      checking for file ‘/private/var/folders/zs/0cz1t0cs5_jfq3r2fd90x0b80000gn/T/RtmpfoZn2l/remotesf7f757f1f0bd/afranks86-envelopeR-079e4bc/DESCRIPTION’ ...  ✓  checking for file ‘/private/var/folders/zs/0cz1t0cs5_jfq3r2fd90x0b80000gn/T/RtmpfoZn2l/remotesf7f757f1f0bd/afranks86-envelopeR-079e4bc/DESCRIPTION’
-    ##   ─  preparing ‘envelopeR’:
-    ##      checking DESCRIPTION meta-information ...  ✓  checking DESCRIPTION meta-information
-    ##   ─  checking for LF line-endings in source and make files and shell scripts
-    ##   ─  checking for empty or unneeded directories
-    ##   ─  creating default NAMESPACE file
-    ##   ─  building ‘envelopeR_0.1.0.tar.gz’
-    ##      
-    ## 
-
-``` r
 library(tidyverse)
 library(covreg)
 library(envelopeR)
@@ -61,7 +44,10 @@ V  <- test_data$V
 ## Fit the Envelope model
 
 ``` r
-envfit <- fit_envelope(Y, X, distn="covreg", s=s,
+## `get_rank` can be used to infer the appropriate dimension of hte subspace of material variation
+s_hat <- getRank(Y)
+
+envfit <- fit_envelope(Y, X, distn="covreg", s=s_hat,
                        Vinit="OLS",
                        verbose_covreg=FALSE)
 ```
@@ -87,7 +73,7 @@ envfit <- fit_envelope(Y, X, distn="covreg", s=s,
     ## [1] "Iteration 16: F = 25.559096, dF = -6.365837, tau = 0.000000"
     ## [1] "Reached maximum iterations in line search."
     ## [1] "Iteration 17: F = 25.559096, dF = -6.365839, tau = 0.000000"
-    ## [1] "F(V) = 25.559096, time = 5.55064511299133"
+    ## [1] "F(V) = 25.559096, time = 7.25054812431335"
     ## [1] "Starting e-step sampling..."
     ## [1] "Finished e-step sampling..."
     ## [1] "------ F(V) = 24.626351 --------"
@@ -105,13 +91,13 @@ envfit <- fit_envelope(Y, X, distn="covreg", s=s,
     ## [1] "Iteration 12: F = 24.624110, dF = -0.017153, tau = 0.000000"
     ## [1] "Iteration 13: F = 24.624110, dF = -0.017153, tau = 0.000000"
     ## [1] "Iteration 14: F = 24.624110, dF = -0.017153, tau = 0.000000"
-    ## [1] "F(V) = 24.624110, time = 5.05837917327881"
+    ## [1] "F(V) = 24.624110, time = 4.82364702224731"
     ## [1] "Starting e-step sampling..."
     ## [1] "Finished e-step sampling..."
     ## [1] "------ F(V) = 24.602381 --------"
     ## [1] "Reached maximum iterations in line search."
     ## [1] "Iteration 1: F = 24.602381, dF = Inf, tau = 0.000000"
-    ## [1] "F(V) = 24.602381, time = 4.64908909797668"
+    ## [1] "F(V) = 24.602381, time = 4.13055491447449"
     ## [1] "Starting e-step sampling..."
     ## [1] "Finished e-step sampling..."
 
@@ -119,15 +105,27 @@ Check inferred subspace is close to the true material subspace (1 means
 they are identical subspaces).
 
 ``` r
-tr(envfit$V  %*% t(envfit$V)  %*% V  %*% t(V))/s
+print(sprintf("Subspace similarity: %f", 
+              tr(envfit$V  %*% t(envfit$V)  %*% V  %*% t(V))/s))
 ```
 
-    ## [1] 0.9934864
+    ## [1] "Subspace similarity: 0.993486"
+
+``` r
+## Sphericity test: if small pvalue, reject isotropy of immaterial subspace
+Vperp <- NullC(envfit$V) 
+print(sprintf("P-value of sphericity test is: %f", 
+              test_sphericity(Y %*% Vperp)$p.value))
+```
+
+    ## [1] "P-value of sphericity test is: 0.882835"
 
 Re-run full Bayesian inference conditional on the inferred subspace of
-material variation. Alternatively, can get `cov_psamp` from the list
-returned by `fit_envelope` by running `cov_psamp <-
-cov.psamp(envfit$covariance_list$covreg_res)`.
+material variation. We do this to run the sampler for longer iterations
+than the default returned by the EM algorithm. We can also get
+`cov_psamp` from the list returned by `fit_envelope` by running
+`cov_psamp <- cov.psamp(envfit$covariance_list$covreg_res)` (default 100
+iterations).
 
 ``` r
 YV  <- Y %*% envfit$V
@@ -140,6 +138,10 @@ cov_psamp  <- cov_psamp[, , , 1:1000]
 
 ### Posterior plot
 
+We plot posterior samples of \(\Psi_x\) for minimum, maximum and
+quartiles of the first covariate \(X_1\). Non-overlapping groups is
+suggestive of differences in the covariances a posteriori.
+
 ``` r
 type  <- "mag"
 
@@ -151,7 +153,6 @@ obs_to_plot <- ix[c(1, 25, 50, 75, 100)]
 names(obs_to_plot)  <- c(0, 0.25, 0.5, 0.75, 1)
 
 cols <- colorspace::sequential_hcl(5, "viridis")
-
 
 post  <- create_plots(envfit$V, cov_psamp,
                       n1=obs_to_plot[1], n2=obs_to_plot[length(obs_to_plot)],
@@ -181,6 +182,11 @@ The true eigenvalues and angles on this two-dimensional subspaces are:
 
 ### Biplot
 
+Contours show posterior mean covariances matrices for \(\Psi_x\). Points
+represent the largest magnitue loadings on this two-deimsinao subspace.
+We choose the subspace to maximize the difference in covariance matrices
+between observation \(n_1\) and \(n_2\)
+
 ``` r
 rownames(envfit$V)  <- 1:p
 biplot  <- create_plots(envfit$V, cov_psamp,
@@ -189,11 +195,5 @@ biplot  <- create_plots(envfit$V, cov_psamp,
                         labels=colnames(Y), plot_type="biplot")
 biplot
 ```
-
-    ## Warning: Removed 10 rows containing missing values (geom_point).
-
-    ## Warning: Removed 5 rows containing missing values (geom_label_repel).
-    
-    ## Warning: Removed 5 rows containing missing values (geom_label_repel).
 
 ![](README_files/figure-gfm/biplot-1.png)<!-- -->

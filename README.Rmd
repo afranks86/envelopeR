@@ -46,7 +46,7 @@ V  <- test_data$V
 ```{r fit_envelope}
 
 ## `get_rank` can be used to infer the appropriate dimension of hte subspace of material variation
-s_hat <- get_rank(Y)
+s_hat <- getRank(Y)
 
 envfit <- fit_envelope(Y, X, distn="covreg", s=s_hat,
                        Vinit="OLS",
@@ -123,7 +123,7 @@ tibble(quantile=names(obs_to_plot), eval=evals, angle=angles)
 Contours show posterior mean covariances matrices for $\Psi_x$.  Points represent the largest magnitue loadings on this two-deimsinao subspace.  We choose the subspace to maximize the difference in covariance matrices between observation $n_1$ and $n_2$
 
 
-```{r, biplot, warn=FALSE}
+```{r, biplot, warning=FALSE}
 rownames(envfit$V)  <- 1:p
 biplot  <- create_plots(envfit$V, cov_psamp,
                         n1=obs_to_plot[1], n2=obs_to_plot[length(obs_to_plot)],
