@@ -6,8 +6,9 @@ library(ggrepel)
 #' @param Y
 #'
 #' @return
-#' @export get_rank
+#' @export getRank
 #'
+#' @examples
 getRank <- function(Y) {
 
   svals <- svd(Y)$d
@@ -655,7 +656,17 @@ steinsLoss <- function(C1, C2inv) {
 
 }
 
-  q
+#' ## Optimal low rank threshold from Gavish, Donoho 2014
+#'
+#' @param n
+#' @param p
+#' @param s
+#' @param q
+#'
+#' @return
+#' @export generate_test_data
+#'
+#' @examples
 generate_test_data  <- function(n=100, p=10, s=2, q=1,
                                 beta_sd = 2, gamma_sd=4, error_sd=0.5,
                                 cov_rank = s,

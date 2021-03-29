@@ -1,7 +1,4 @@
 ---
-title: "Readme"
-author: "Alex Franks"
-date: "3/28/2021"
 output: github_document
 ---
 
@@ -47,7 +44,11 @@ V  <- test_data$V
 ## Fit the Envelope model
 
 ```{r fit_envelope}
-envfit <- fit_envelope(Y, X, distn="covreg", s=s,
+
+## `get_rank` can be used to infer the appropriate dimension of hte subspace of material variation
+s_hat <- get_rank(Y)
+
+envfit <- fit_envelope(Y, X, distn="covreg", s=s_hat,
                        Vinit="OLS",
                        verbose_covreg=FALSE)
 ```
@@ -56,11 +57,17 @@ envfit <- fit_envelope(Y, X, distn="covreg", s=s,
 Check inferred subspace is close to the true material subspace (1 means they are identical subspaces).
 
 ```{r}
-tr(envfit$V  %*% t(envfit$V)  %*% V  %*% t(V))/s
+print(sprintf("Subspace similarity: %f", 
+              tr(envfit$V  %*% t(envfit$V)  %*% V  %*% t(V))/s))
+
+## Sphericity test: if small pvalue, reject isotropy of immaterial subspace
+Vperp <- NullC(envfit$V) 
+print(sprintf("P-value of sphericity test is: %f", 
+              test_sphericity(Y %*% Vperp)$p.value))
 ```
 
 
-Re-run full Bayesian inference conditional on the inferred subspace of material variation.  Alternatively, can get `cov_psamp` from the list returned by `fit_envelope` by running `cov_psamp <- cov.psamp(envfit$covariance_list$covreg_res)`.  
+Re-run full Bayesian inference conditional on the inferred subspace of material variation.  We do this to run the sampler for longer iterations than the default returned by the EM algorithm.  We can also get `cov_psamp` from the list returned by `fit_envelope` by running `cov_psamp <- cov.psamp(envfit$covariance_list$covreg_res)` (default 100 iterations).
 
 ```{r, rerun_mcmc}
 YV  <- Y %*% envfit$V
@@ -72,6 +79,8 @@ cov_psamp  <- cov_psamp[, , , 1:1000]
 ## Plotting
 
 ### Posterior plot
+
+We plot posterior samples of $\Psi_x$ for minimum, maximum and quartiles of the first covariate $X_1$.  Non-overlapping groups is suggestive of differences in the covariances a posteriori.
 
 ```{r, posterior_plot, dependson="rerun_mcmc"}
 type  <- "mag"
@@ -85,7 +94,6 @@ names(obs_to_plot)  <- c(0, 0.25, 0.5, 0.75, 1)
 
 cols <- colorspace::sequential_hcl(5, "viridis")
 
-
 post  <- create_plots(envfit$V, cov_psamp,
                       n1=obs_to_plot[1], n2=obs_to_plot[length(obs_to_plot)],
                       to_plot = obs_to_plot, col_values=cols,
@@ -96,6 +104,7 @@ post
 The true eigenvalues and angles on this two-dimensional subspaces are:
 
 ```{r, echo=FALSE, true_vals}
+## Align subspaces 
 rotV  <- rotate_basis(envfit$V, cov_psamp, n1=obs_to_plot[1], n2=obs_to_plot[length(obs_to_plot)])$rotV
 R <- t(V) %*% rotV
 Vrot  <- V %*% R
@@ -110,6 +119,9 @@ tibble(quantile=names(obs_to_plot), eval=evals, angle=angles)
 ```
 
 ### Biplot
+
+Contours show posterior mean covariances matrices for $\Psi_x$.  Points represent the largest magnitue loadings on this two-deimsinao subspace.  We choose the subspace to maximize the difference in covariance matrices between observation $n_1$ and $n_2$
+
 
 ```{r, biplot, warn=FALSE}
 rownames(envfit$V)  <- 1:p
