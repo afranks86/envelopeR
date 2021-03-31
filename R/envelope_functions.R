@@ -606,5 +606,4 @@ cov_psamp  <- function (fit)
     }
 
     s.psamp
-
 }

@@ -1,4 +1,4 @@
-#' Empirical Bayes inference for the envelope model, as described in Franks et al (2018).  
+#' Empirical Bayes inference for the envelope model, as described in Franks et al (2020).
 #'
 #' `fit_envelope` fits an envelope model to data.
 #' N = sample size
@@ -7,9 +7,9 @@
 #' R = orthogonal supace of shared covariation
 #' S + R <= P.  P - S - R dimensions have isotropic covariance sigma^2
 #' D scales the variances
-#' 
-#' @param Y an n x p matrix.  Rows are independent observations of a p-variate normal.  
-#' @param X an n x q matrix of q-covariates.  
+#'
+#' @param Y an n x p matrix.  Rows are independent observations of a p-variate normal.
+#' @param X an n x q matrix of q-covariates.
 #' @param D a diagonal matrix
 #' @param s dimension of the subspace of relevant variation
 #' @param r subspace of irrelevant non-isotropic variation?
@@ -17,41 +17,22 @@
 #' @return A list including: a semi-orthogonal matrix, V, the basis for the subspace of relevant variation.
 #' @author Alexander Franks
 #' @examples
-#' 
+#'
 #' @export fit_envelope
-fit_envelope <- function(Y, X, distn = "normal", ...){
+fit_envelope <- function(Y, X, distn = "covreg", ...){
 
-    if(distn == "normal") {
-        normal_fit <- optimize_envelope(Y, X, ...)
-        normal_fit 
-        
-    } else if (distn == "covreg") {
+      if((distn == "covreg") {
 
-        cook_fit <- optimize_envelope_covreg(Y, X, ...)
-        cook_fit
-        
-    } else if (distn == "cook") {
-
-        cook_fit <- optimize_envelope_cook(Y, X, ...)
-        cook_fit
+        covreg_fit <- optimize_envelope_covreg(Y, X, ...)
+        covreg_fit
         
     } else if (distn == "custom") {
 
         custom_fit <- optimize_envelope_custom(Y, X, ...)
         custom_fit
 
-    } else if (distn == "cook_kd") {
-        cook_fit <- optimize_envelope_cook_kd(Y, X, ...)
-        cook_fit
-        
-    } else if (distn == "laplace") {
-        
-
-    } else if (distn == "") {
-
-        
-    } else {
-        stop("distn but must be normal, laplace or t")
+    } else{
+        stop("'distn' but must be 'covreg', 'custom'")
     }
 
 
@@ -329,6 +310,28 @@ optimize_envelope <- function(Y, X, D = diag(ncol(Y)),
 }
 
 
+
+#' Empirical Bayes inference for the envelope model, as described in Franks et al (2018).
+#'
+#' `fit_envelope` fits a envelope model to data.
+#' N = sample size
+#' P = number of features
+#' S = subspace of mean variation
+#' R = orthogonal supace of shared covariation
+#' S + R <= P.  P - S - R dimensions have isotropic covariance sigma^2
+#' D scales the variances
+#'
+#' @param Y an n x p matrix.  Rows are independent observations of a p-variate normal.
+#' @param X an n x q matrix of q-covariates.
+#' @param D a diagonal rescaling matrix for the features Y
+#' @param s dimension of the subspace of relevant variation
+#' @param r subspace of irrelevant non-isotropic variation?
+#' @param Vinit how to initialize the subspace
+#' @return A list including: a semi-orthogonal matrix, V, the basis for the subspace of relevant variation.
+#' @author Alexander Franks
+#' @examples
+#'
+#' @export optimize_envelope_covreg
 optimize_envelope_covreg <- function(Y, X,
                                      D = diag(ncol(Y)),
                                      s=2, r=0,
@@ -543,6 +546,8 @@ optimize_envelope_custom <- function(Y, X,
                                      searchParams=NULL) {
 
 
+  stop("Not yet fully implemented.")
+
   Y <- Y %*% D
   n <- nrow(Y)
   p <- ncol(Y)
@@ -687,268 +692,5 @@ optimize_envelope_custom <- function(Y, X,
   list(V=V, intercept=intercept, beta_ols=beta_hat,
        beta_env=beta_env, eta_hat=eta_hat_env, F=F, dF=dF,
        covariance_list = estep)
-
-}
-
-
-
-
-optimize_envelope_cook <- function(Y, X, D = diag(ncol(Y)),
-                                   s=2, r=0,
-                                   Vinit = "OLS",
-                                   Lambda0 = t(X) %*% X,
-                                   prior_counts=0,
-                                   Beta0 = matrix(0, nrow=ncol(X), ncol=ncol(Y)),
-                                   v1=0, v0 = 0,
-                                   U1=matrix(0, nrow=s, ncol=s),
-                                   U0=matrix(0, nrow=r, ncol=r),
-                                   alpha=0, nu=0, nchunks = 1, L=0,
-                                   center=TRUE, maxIters=1000,
-                                   searchParams=NULL, ...) { 
-
-
-    Y <- Y %*% D
-    n <- nrow(Y)
-    p <- ncol(Y)
-    q <- ncol(X)
-
-    intercept <- rep(0, ncol(Y))
-    if(center) {
-        intercept <- colMeans(Y)
-        Y <- scale(Y, scale=FALSE)
-    } else {
-        intercept <- rep(0, ncol(Y))
-    }
-    
-    L0 <- chol(Lambda0) * sqrt(prior_counts / n)
-    Lambda0 <- Lambda0 * prior_counts / n
-
-    beta_hat <- solve(t(X) %*% X + Lambda0) %*% (t(X) %*% Y + Lambda0 %*% Beta0)
-    residual <- Y - X %*% beta_hat
-
-    if(is.character(Vinit)) {
-        if(Vinit == "OLS") {
-
-            Vinit <- svd(beta_hat)$v[, 1:min(s, q), drop=FALSE]
-            res_proj <- (diag(p) - Vinit %*% t(Vinit)) %*% t(residual)
-            if( r > 0 ) {
-                Uinit <- svd(res_proj)$u[, 1:r]
-            } else
-                Uinit <- matrix(nrow=p, ncol=0)
-            
-            if(q < (s+r)) {
-                Vinit <- cbind(Vinit, Uinit)
-                if(s > q) {
-                    Vinit <- cbind(Vinit, NullC(Vinit)[, 1:(s-q), drop=FALSE])
-                }
-            }
-        } else if(Vinit == "COV") {
-            Vinit <- svd(Y)$v[, 1:min((s+r), q), drop=FALSE]
-            if(q < (s+r)) {
-                Vinit <- cbind(Vinit, NullC(Vinit)[, 1:(s+r-q), drop=FALSE])
-            } 
-        } else {
-            warn("Randomly initializing")
-            Vinit <- rustiefel(ncol(Y), s+r)
-        }
-    } else if(is.null(Vinit)) {
-        Vinit <- rustiefel(ncol(Y), s+r)
-    } else if( !is.matrix(Vinit) ) {
-        stop("Vinit must be a semi-orthogonal matrix or string")
-    } 
-    
-    if (s <= 0){
-        stop("Require s > 0")
-    }
-    if (r < 0){
-        stop("Require r >= 0")
-    }
-    if(s + r > p) {
-        stop("Require s + r <= p")
-    }
-
-    if(norm(t(Vinit) %*% Vinit - diag(s+r)) > 1e-6) {
-        stop("Vinit not semi-orthogonal")
-    }
-    
-    evals <- eigen(t(X) %*% X)$values
-    if (evals[length(evals)] < 1e-6) {
-        warning("Perfect Colinearity in X")
-    }
-
-    ## res <- cv.glmnet(X, Y, family="mgaussian", alpha=1)
-    ## lambda_min <- res$lambda.min
-
-    ## res <- glmnet(X, Y, family="mgaussian", alpha=1, lambda=lambda_min)
-    
-    prior_diff <- Beta0 - beta_hat 
-
-    evals <- eigen(t(X) %*% X)$values
-    if (evals[length(evals)] < 1e-6) {
-        browser()
-    }
-
-    MU <- t(Y) %*% Y / n  ##diag(p)
-
-    ## shrinakge estimation
-    MUvecs <- eigen(MU)$vectors[, (getRank(MU) + 1):p]
-
-    Mvecs <- eigen(M)$vectors[, (getRank(M) + 1):p]
-
-    U0ing <- solve(U0)
-    if(n < p)
-        MUinv <- U0inv - U0inv %*% t(Y) %*% (diag() + Y %*% U0inv %*% t(Y))
-    Vinit <- Vinit[, 1:s]
-
-    V <- Vinit
-
-    for(iter in 1:3) {
-
-
-
-        G <- V[, 1:s, drop=FALSE]
-        if(r > 0) {
-            G0 <- V[, (s+1):(s+r)]
-            YG0 <- Y_tilde %*%  G0
-            G0part <- as.numeric((n + r + v0 - 1)/2 *
-                                 determinant(crossprod(YG0) + U0,
-                                             logarithm = TRUE)$modulus)
-
-            if(r + s < p){
-                YV <- Y_tilde %*% V
-                sig2part <- (n*(p-s-r)/2 + alpha) *
-                    log(sum(Y_tilde^2)/2 - sum(YV^2)/2 + nu)
-            } else {
-                sig2part <- 0
-            }
-            
-        } else {
-            G0part <- 0
-
-            if(r + s < p){ 
-                YV <- Y_tilde %*% V
-                sig2part <- (n*(p-s-r)/2 + alpha) *
-                    log(sum(Y_tilde^2) / 2 - sum(YV^2)/2 + nu)
-            } else {
-                sig2part <- 0
-            }
-
-            
-            indices_mat <- matrix(sample(ncol(Vinit)), ncol=nchunks, byrow=TRUE)
-            
-            F <- function(V) {
-                RV <- residual %*% V
-                det1 <- (n + s + v1 + 1 - q)/2 *determinant(crossprod(RV), logarithm = TRUE)$modulus
-                det2 <- (n + r + v0 - 1)/2 %*% determinant(t(V) %*% MUinv %*% V, logarithm = TRUE)$modulus
-                det1 + det2
-            }
-            
-            dF <- function(V) {
-                RV <- resid %*% V
-                2 * t(resid) %*% RV %*% solve(t(RV) %*% RV) +
-                    2 * MUinv %*% V %*% solve(t(Vs) %*% MUinv %*% V)
-            }
-
-            print(sprintf("------ F(V) = %f --------", F(V)))
-
-
-            for(i in 1:nrow(indices_mat)) {
-
-                indices <- indices_mat[i, ]
-                print(sprintf("COUNT: %i, Indices: %s", i, paste0(indices, collapse=", ")))
-
-                V1 <- V[, indices]
-                V2 <- V[, -indices]
-                NullV2 <- NullC(V2)        
-
-                ## Part 1
-                MV2 <- M %*% V2
-                A <-  t(NullV2) %*% (M - MV2 %*% solve(t(V2) %*% MV2) %*% t(MV2)) %*% NullV2
-
-                ## Part 2
-                MUinvV2 <- MUinv %*% V2
-                MV2 <- M %*% V2
-                B <-  t(NullV2) %*% (MUinv - MUinvV2 %*% solve(t(V2) %*% MUinvV2) %*% t(MUinvV2)) %*% NullV2
-                
-                ## log det: t(V1) %*% (M - MV2 %*% VMVing %*% t(MV2)) %*% V1
-                ## V1 = NulLV2 %*% V1star
-
-                Fi <- function(Vi) {
-                    determinant(t(Vi) %*% A %*% Vi,
-                                logarithm = TRUE)$modulus +
-                                                    determinant(t(Vi) %*% B %*% Vi, logarithm = TRUE)$modulus
-                }
-
-                dFi <- function(Vi) {
-                    2 * A %*% Vi %*% solve(t(Vi) %*% A %*% Vi) +
-                        2 * B %*% Vi %*% solve(t(Vi) %*% B %*% Vi)
-                }
-
-                print("Fitting Stiefel manifold")
-                Vfit <- optStiefel(
-                    Fi,
-                    dFi,
-                    method = "bb",
-                    Vinit = t(NullV2) %*% V1,
-                    verbose = FALSE,
-                    maxIters = maxIters,
-                    maxLineSearchIters = 20
-                )
-
-                V[, indices] <- NullV2 %*% Vfit
-
-            }
-
-
-
-        }
-        print(sprintf("------ F(V) = %f --------", F(V)))
-        Yproj <- Y %*% V[, 1:s]
-        eta_hat_env <- solve(t(X) %*% X + Lambda0) %*% t(X) %*% Yproj
-        beta_env <- eta_hat_env %*% t(V[, 1:s])
-
-        list(V=V, intercept=intercept, beta_ols=beta_hat,
-             beta_env=beta_env, eta_hat=eta_hat_env, F=F, dF=dF)
-        
-
-    }
-
-
-
-
-    #' Ledoit-Wolfe Shrinkage Estimatiaon of Sigma
-    #'
-    #' 
-    lw_shrinkage <- function(Y) {
-
-        ## matrix dimensions
-        p <- ncol(Y)
-        n <- nrow(Y)
-
-        ## sample covariance matrix
-        
-        m <- sum(Y^2)/ (n*p)
-
-        trace_S2 <- sum(svd(Y)$d^4)/n^2
-        
-        d2 <- (trace_S2 + m^2 *p - 2*m*sum(svd(Y)$d^2)/n) / p
-
-        dispersion_vec <- sapply(1:nrow(Y), function(i) {
-
-            disp <- sum(svd(Y[i, ])$d^4) + 
-                trace_S2 -
-                2/n * tr((Y[i, , drop=FALSE] %*% t(Y)) %*%
-                         (Y %*% t(Y[i, , drop=FALSE])))
-            
-            disp / p
-
-        })
-
-        
-        b2 <- min(sum(dispersion_vec) / n^2, d2)
-
-        list(b2=b2, d2=d2, m=m)
-        
-    }
 
 }

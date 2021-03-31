@@ -785,3 +785,40 @@ test_sphericity <- function(x, test = "sphericity"){
     return(list(test.statistic = W, p.value = p.value))
   }
 }
+
+
+
+#' Ledoit-Wolfe Shrinkage Estimatiaon of Sigma
+lw_shrinkage <- function(Y) {
+
+        ## matrix dimensions
+        p <- ncol(Y)
+        n <- nrow(Y)
+
+        ## sample covariance matrix
+
+        m <- sum(Y^2)/ (n*p)
+
+        trace_S2 <- sum(svd(Y)$d^4)/n^2
+
+        d2 <- (trace_S2 + m^2 *p - 2*m*sum(svd(Y)$d^2)/n) / p
+
+        dispersion_vec <- sapply(1:nrow(Y), function(i) {
+
+            disp <- sum(svd(Y[i, ])$d^4) +
+                trace_S2 -
+                2/n * tr((Y[i, , drop=FALSE] %*% t(Y)) %*%
+                         (Y %*% t(Y[i, , drop=FALSE])))
+
+            disp / p
+
+        })
+
+
+        b2 <- min(sum(dispersion_vec) / n^2, d2)
+
+        list(b2=b2, d2=d2, m=m)
+
+    }
+
+}
