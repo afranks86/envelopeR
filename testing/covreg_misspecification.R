@@ -31,7 +31,7 @@ s <- 4
 
 sfit <- c(2:s, 2*s, 3*s, p)
 
-create_cov_eigen <- function(X, gammaList, s, scaler=1) {
+create_cov <- function(X, gammaList, s, scaler=1) {
     
     sig_X <- matrix(0, ncol=s, nrow=s)
     for(i in 1:s) {
@@ -51,11 +51,11 @@ for(q_cur in 1:qmax) {
         beta_count  <- 1
         for(beta_sd in beta_sd_vec) {
 
-            X <- matrix(rnorm(n*q_cur, 0, 1), nrow=n, ncol=q_cur)
+          X <- matrix(rnorm(n*q_cur, 0, 1), nrow=n, ncol=q_cur)
 
  
             gammaList <- lapply(1:s, function(i) matrix(rnorm(s*q_cur, 0, sd=gamma_sd), nrow=s, ncol=q_cur))
-            cov_list  <- lapply(1:n, function(i) create_cov_eigen(X[i, , drop=FALSE], gammaList, s, scaler=1) + error_sd^2 * diag(s))
+            cov_list  <- lapply(1:n, function(i) create_cov(X[i, , drop=FALSE], gammaList, s, scaler=1) + error_sd^2 * diag(s))
             
             V  <- rustiefel(p, s)
             Vnull  <- rstiefel::NullC(V)
