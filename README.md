@@ -133,7 +133,7 @@ below.
 ### Biplot
 
 Contours show posterior mean covariances matrices for \(\Psi_x\). Points
-represent the largest magnitue loadings on this two-deimsinao subspace.
+represent the largest magnitue loadings on this two-dimensional subspace.
 We choose the subspace to maximize the difference in covariance matrices
 between observation \(n_1\) and \(n_2\)
 
