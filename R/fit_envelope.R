@@ -21,7 +21,7 @@
 #' @export fit_envelope
 fit_envelope <- function(Y, X, distn = "covreg", ...){
 
-  if((distn == "covreg"){
+  if(distn == "covreg"){
     covreg_fit <- optimize_envelope_covreg(Y, X, ...)
     covreg_fit
   } else if (distn == "custom"){
