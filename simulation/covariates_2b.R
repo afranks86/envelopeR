@@ -1,3 +1,7 @@
+###################################
+####### Figure 2b in Franks 2020
+##################################
+
 options(mc.cores = parallel::detectCores())
 library(tidyverse)
 library(mvtnorm)
@@ -45,8 +49,8 @@ s <- 4
 
 score_array  <- array(dim=c(s, nreps, length(beta_sd_vec)))
 
-for(q in 2:2) {
-    for(i in 70:nreps) {
+for(q in 1:4) {
+    for(i in 1:nreps) {
 
         X <- matrix(runif(n*q, 0, 1), nrow=n, ncol=q)
         cov_list  <- lapply(1:n, function(i) create_cov_eigen(X[i, , drop=FALSE], scaler=1))
