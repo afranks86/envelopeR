@@ -791,34 +791,32 @@ test_sphericity <- function(x, test = "sphericity"){
 #' Ledoit-Wolfe Shrinkage Estimatiaon of Sigma
 lw_shrinkage <- function(Y) {
 
-        ## matrix dimensions
-        p <- ncol(Y)
-        n <- nrow(Y)
+  ## matrix dimensions
+  p <- ncol(Y)
+  n <- nrow(Y)
 
-        ## sample covariance matrix
+  ## sample covariance matrix
 
-        m <- sum(Y^2)/ (n*p)
+  m <- sum(Y^2)/ (n*p)
 
-        trace_S2 <- sum(svd(Y)$d^4)/n^2
+  trace_S2 <- sum(svd(Y)$d^4)/n^2
 
-        d2 <- (trace_S2 + m^2 *p - 2*m*sum(svd(Y)$d^2)/n) / p
+  d2 <- (trace_S2 + m^2 *p - 2*m*sum(svd(Y)$d^2)/n) / p
 
-        dispersion_vec <- sapply(1:nrow(Y), function(i) {
+  dispersion_vec <- sapply(1:nrow(Y), function(i) {
 
-            disp <- sum(svd(Y[i, ])$d^4) +
-                trace_S2 -
-                2/n * tr((Y[i, , drop=FALSE] %*% t(Y)) %*%
-                         (Y %*% t(Y[i, , drop=FALSE])))
+    disp <- sum(svd(Y[i, ])$d^4) +
+      trace_S2 -
+      2/n * tr((Y[i, , drop=FALSE] %*% t(Y)) %*%
+               (Y %*% t(Y[i, , drop=FALSE])))
 
-            disp / p
+    disp / p
 
-        })
+  })
 
 
-        b2 <- min(sum(dispersion_vec) / n^2, d2)
+  b2 <- min(sum(dispersion_vec) / n^2, d2)
 
-        list(b2=b2, d2=d2, m=m)
-
-    }
+  list(b2=b2, d2=d2, m=m)
 
 }
