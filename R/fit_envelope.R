@@ -21,21 +21,17 @@
 #' @export fit_envelope
 fit_envelope <- function(Y, X, distn = "covreg", ...){
 
-      if((distn == "covreg") {
+  if((distn == "covreg"){
+    covreg_fit <- optimize_envelope_covreg(Y, X, ...)
+    covreg_fit
+  } else if (distn == "custom"){
 
-        covreg_fit <- optimize_envelope_covreg(Y, X, ...)
-        covreg_fit
-        
-    } else if (distn == "custom") {
+    custom_fit <- optimize_envelope_custom(Y, X, ...)
+    custom_fit
 
-        custom_fit <- optimize_envelope_custom(Y, X, ...)
-        custom_fit
-
-    } else{
-        stop("'distn' but must be 'covreg', 'custom'")
-    }
-
-
+  } else{
+    stop("'distn' but must be 'covreg', 'custom'")
+  }
 
 
 }
