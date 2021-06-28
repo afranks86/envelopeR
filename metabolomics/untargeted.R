@@ -11,25 +11,8 @@ library(kableExtra)
 
 source("utility.R")
 
-targeted  <- read_csv("data/targeted.csv")
+targeted  <- read_csv("data/untargeted.csv")
 subject_info  <- read_csv("data/subject_info.csv")
-
-subject_data$Metabolite %>% unique
-
-
-## ## X <- matrix(rnorm(N, sd = 5), ncol=1)
-## wide_data <- subject_data %>%
-##   filter(!(Type %in% c("Other"))) %>%
-##   mutate(Type = droplevels(Type), Type2 = droplevels(Type2)) %>%
-##     dplyr::select(-one_of("Code", "Mode", "RunIndex",
-##                           "Raw", "Trend", "RawScaled")) %>%
-##   spread(key = Metabolite, value = Abundance)
-
-## Y <- wide_data %>%
-##     dplyr::select(-one_of("Id", "Type", "Type2", "Gender",
-##                           "Age", "APOE", "Batch", "Index",
-##                           "GBAStatus", "GBA_T369M", "cognitive_status")) %>%
-##     as.matrix()
 
 Y  <- targeted %>% as.matrix
 
@@ -56,7 +39,7 @@ X <- subject_info %>% mutate(Type2 = ifelse(Type != "AD", "C", "AD")) %>%
   as.matrix
 
 ## Focus only on aging among controls
-control_indices  <- which(subject_info$Type2=="C")
+control_indices  <- which(subject_info$Type %in% c("CY", "CM", "CO"))
 
 Xfit  <- X[control_indices, c("Age", "SexM"), drop=FALSE]
 Yfit  <- Y[control_indices, ]
@@ -64,14 +47,14 @@ Yfit  <- Y[control_indices, ]
 Xfit[order(Xfit[, 1]), ]
 xord  <- order(Xfit[, 1])
 
-## Exploratory stuff
-plot(svd(Y)$d)
+## Get the rank
 s  <- getRank(Yfit)
 q <- ncol(Xfit)
 
 #############################
 #### Envelope Fit
 ############################
+
 res <- fit_envelope(Y=Yfit, X=Xfit, s=s, distn="covreg", maxIters=1000, Vinit="OLS")
 
 YVfit  <- Yfit %*% res$V
@@ -286,42 +269,12 @@ for(i in seq(1, s, 2)) {
                            y=c(rep(0, sum(xy=="x")), pos[xy=="y"]),
                            labels = labels)
 
-
-
-
-
-
-  post  <- create_plots(res$V, cov_psamp,
-                        n1=to_plot[1], n2=to_plot[length(to_plot)],
-                        to_plot = to_plot, obs_names=Xfit[to_plot, "Age"], col_values=cols,
-                        labels=colnames(Y), plot_type="posterior", alpha=0.5)
-
-  combo  <- create_plots(res$V, cov_psamp,
-                         n1=to_plot[1], n2=to_plot[length(to_plot)],
-                         to_plot = to_plot, col_values=cols,
-                         obs_names=Xfit[to_plot, "Age"], view=c(i, i+1), labels=1:nrow(res$V),
-                         legend.pos="right", main="Untargeted",
-                         custom_label_data = custom_label_data, label_size=3)
-  combo
-
-
-  post  <- create_plots(res$V, cov_psamp,
-                        n1=to_plot[1], n2=to_plot[length(to_plot)],
-                        to_plot = to_plot, col_values=cols,
-                        obs_names=nms[to_plot], view=c(i, i+1), labels=colnames(Y), plot_type="posterior", alpha=0.4)
-
-  ## linePlot  <- create_plots(res$V, cov_psamp,
-  ##                        n1=to_plot[1], n2=to_plot[length(to_plot)],
-  ##                        to_plot = to_plot, col_values=cols,
-  ##                        obs_names=nms, view=c(i, i+1), labels=colnames(Y), plot_type="line", alpha=0.2)
-
   combo  <- create_plots(res$V, cov_psamp,
                          n1=to_plot[1], n2=to_plot[length(to_plot)],
                          to_plot = to_plot, col_values=cols,
                          obs_names=nms[to_plot], view=c(i, i+1), labels=1:nrow(res$V),
                          legend.pos="right", main="Untargeted",
                          custom_label_data = custom_label_data, label_size=3)
-  combo
                                         #colnames(Y))
   ## ggsave(sprintf("../figs/gotms/aging_mgCov/aging_reg_biplot-%i%i.pdf", i, i+1), bp)
   ## ggsave(sprintf("../figs/gotms/aging_mgCov/aging_reg_posterior-%i%i.pdf", i, i+1), post)
