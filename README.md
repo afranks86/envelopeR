@@ -18,6 +18,8 @@ application on the metabolomics of aging.
 
 Preprint: <https://arxiv.org/abs/2010.00503>
 
+Addition Readme's can be found in `simulation/` and `metabolomics/` folders which provide additional detail regarding running scripts which generated the simulation and applied results respectively.
+
 ## Installation
 
 ``` r
